@@ -1,10 +1,11 @@
 package lzma
 
 import (
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecode(t *testing.T) {
