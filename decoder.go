@@ -204,6 +204,12 @@ func (dec *Decoder) Decode() error {
 		isError  bool
 	)
 
+	defer func() {
+		if dec.outWindow.CachePending() {
+			dec.outWindow.Flush()
+		}
+	}()
+
 	for {
 		if dec.unpackSizeDefined && dec.unpackSize == 0 && !dec.markerIsMandatory {
 			if dec.rangeDec.IsFinishedOK() {
