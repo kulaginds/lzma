@@ -69,6 +69,9 @@ func (dec *decoder) Init() error {
 	}
 
 	err = dec.decodeUnpackSize(header[5:])
+	if err != nil {
+		return fmt.Errorf("decode unpack size: %w", err)
+	}
 
 	dec.outWindow = newWindow(dec.outStream, dec.dictSize)
 
@@ -162,6 +165,8 @@ func (dec *decoder) decodeProperties(properties []byte) error {
 		return ErrIncorrectProperties
 	}
 
+	properties = properties[1:]
+
 	dec.lc = d % 9
 	d /= 9
 	dec.pb = d / 5
@@ -169,7 +174,7 @@ func (dec *decoder) decodeProperties(properties []byte) error {
 
 	dictSizeInProperties := uint32(0)
 	for i := 0; i < 4; i++ {
-		dictSizeInProperties |= uint32(properties[i+1]) << (8 * i)
+		dictSizeInProperties |= uint32(properties[i]) << (8 * i)
 	}
 
 	dec.dictSize = dictSizeInProperties
