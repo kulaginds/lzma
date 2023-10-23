@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-type decoder struct {
+type Decoder struct {
 	inStream  io.Reader
 	outStream io.Writer
 
@@ -35,8 +35,8 @@ type decoder struct {
 	isRep0Long []uint16
 }
 
-func NewDecoder(inStream io.Reader, outStream io.Writer) *decoder {
-	return &decoder{
+func NewDecoder(inStream io.Reader, outStream io.Writer) *Decoder {
+	return &Decoder{
 		inStream:  inStream,
 		outStream: outStream,
 
@@ -51,7 +51,7 @@ func NewDecoder(inStream io.Reader, outStream io.Writer) *decoder {
 
 const lzmaHeaderLen = 13
 
-func (dec *decoder) Init() error {
+func (dec *Decoder) Init() error {
 	header := make([]byte, lzmaHeaderLen)
 
 	n, err := dec.inStream.Read(header)
@@ -108,7 +108,7 @@ func (dec *decoder) Init() error {
 	return nil
 }
 
-func (dec *decoder) initDist() {
+func (dec *Decoder) initDist() {
 	dec.posSlotDecoder = make([]*bitTreeDecoder, kNumLenToPosStates)
 
 	for i := 0; i < kNumLenToPosStates; i++ {
@@ -129,7 +129,7 @@ const (
 	ProbInitVal           = (1 << kNumBitModelTotalBits) / 2
 )
 
-func (dec *decoder) initLiterals() {
+func (dec *Decoder) initLiterals() {
 	num := uint32(0x300) << (dec.lc + dec.lp)
 
 	for i := uint32(0); i < num; i++ {
@@ -137,7 +137,7 @@ func (dec *decoder) initLiterals() {
 	}
 }
 
-func (dec *decoder) decodeUnpackSize(header []byte) error {
+func (dec *Decoder) decodeUnpackSize(header []byte) error {
 	var b byte
 
 	for i := 0; i < 8; i++ {
@@ -159,7 +159,7 @@ const (
 	lzmaDicMax = 1<<32 - 1
 )
 
-func (dec *decoder) decodeProperties(properties []byte) error {
+func (dec *Decoder) decodeProperties(properties []byte) error {
 	d := properties[0]
 	if d >= (9 * 5 * 5) {
 		return ErrIncorrectProperties
@@ -190,7 +190,7 @@ func (dec *decoder) decodeProperties(properties []byte) error {
 	return nil
 }
 
-func (dec *decoder) Decode() error {
+func (dec *Decoder) Decode() error {
 	var err error
 
 	var (
@@ -297,7 +297,7 @@ func (dec *decoder) Decode() error {
 
 			length, err = dec.repLenDecoder.Decode(posState)
 			if err != nil {
-				return fmt.Errorf("rep length decoder decode: %w", err)
+				return fmt.Errorf("rep length Decoder decode: %w", err)
 			}
 
 			state = UpdateState_Rep(state)
@@ -308,7 +308,7 @@ func (dec *decoder) Decode() error {
 
 			length, err = dec.lenDecoder.Decode(posState)
 			if err != nil {
-				return fmt.Errorf("length decoder decode: %w", err)
+				return fmt.Errorf("length Decoder decode: %w", err)
 			}
 
 			state = UpdateState_Match(state)
@@ -340,7 +340,11 @@ func (dec *decoder) Decode() error {
 			isError = true
 		}
 
-		dec.outWindow.CopyMatch(rep0+1, length)
+		err = dec.outWindow.CopyMatch(rep0+1, length)
+		if err != nil {
+			return err
+		}
+
 		dec.unpackSize -= uint64(length)
 
 		if isError {
@@ -349,7 +353,7 @@ func (dec *decoder) Decode() error {
 	}
 }
 
-func (dec *decoder) DecodeLiteral(state uint32, rep0 uint32) error {
+func (dec *Decoder) DecodeLiteral(state uint32, rep0 uint32) error {
 	prevByte := uint32(0)
 	if !dec.outWindow.IsEmpty() {
 		prevByte = uint32(dec.outWindow.GetByte(1))
@@ -395,7 +399,7 @@ func (dec *decoder) DecodeLiteral(state uint32, rep0 uint32) error {
 	return nil
 }
 
-func (dec *decoder) DecodeDistance(len uint32) (uint32, error) {
+func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
 	lenState := len
 	if lenState > (kNumLenToPosStates - 1) {
 		lenState = kNumLenToPosStates - 1
@@ -403,7 +407,7 @@ func (dec *decoder) DecodeDistance(len uint32) (uint32, error) {
 
 	posSlot, err := dec.posSlotDecoder[lenState].Decode()
 	if err != nil {
-		return 0, fmt.Errorf("pos slot decoder decode: %w", err)
+		return 0, fmt.Errorf("pos slot Decoder decode: %w", err)
 	}
 
 	if posSlot < 4 {

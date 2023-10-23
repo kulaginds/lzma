@@ -53,10 +53,17 @@ func (w *window) GetByte(dist uint32) byte {
 	return w.buf[i]
 }
 
-func (w *window) CopyMatch(dist, len uint32) {
+func (w *window) CopyMatch(dist, len uint32) error {
+	var err error
+
 	for ; len > 0; len-- {
-		w.PutByte(w.GetByte(dist))
+		err = w.PutByte(w.GetByte(dist))
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (w *window) CheckDistance(dist uint32) bool {
