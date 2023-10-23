@@ -425,9 +425,14 @@ func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
 
 		dist += locDist
 	} else {
-		dist += dec.rangeDec.DecodeDirectBits(int(numDirectBits-kNumAlignBits)) << kNumAlignBits
+		bits, err := dec.rangeDec.DecodeDirectBits(int(numDirectBits - kNumAlignBits))
+		if err != nil {
+			return 0, fmt.Errorf("decode direct bits: %w", err)
+		}
 
-		bits, err := dec.alignDecoder.ReverseDecode()
+		dist += bits << kNumAlignBits
+
+		bits, err = dec.alignDecoder.ReverseDecode()
 		if err != nil {
 			return 0, fmt.Errorf("align reverse decode: %w", err)
 		}

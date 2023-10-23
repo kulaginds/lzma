@@ -92,16 +92,25 @@ func (d *rangeDecoder) DecodeBit(prob *uint16) (uint32, error) {
 
 	*prob = v
 
-	err := d.Normalize()
-	if err != nil {
-		return 0, fmt.Errorf("normalize: %w", err)
+	// Normalize
+	if d.Range < kTopValue {
+		_, err := d.inStream.Read(d.b)
+		if err != nil {
+			return 0, fmt.Errorf("read byte: %w", err)
+		}
+
+		d.Range <<= 8
+		d.Code = (d.Code << 8) | uint32(d.b[0])
 	}
 
 	return symbol, nil
 }
 
-func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
-	var res uint32
+func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
+	var (
+		res uint32
+		err error
+	)
 	for ; numBits > 0; numBits-- {
 		d.Range >>= 1
 		d.Code -= d.Range
@@ -112,10 +121,20 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
 			d.Corrupted = true
 		}
 
-		d.Normalize()
+		// Normalize
+		if d.Range < kTopValue {
+			_, err = d.inStream.Read(d.b)
+			if err != nil {
+				return 0, fmt.Errorf("read byte: %w", err)
+			}
+
+			d.Range <<= 8
+			d.Code = (d.Code << 8) | uint32(d.b[0])
+		}
+
 		res <<= 1
 		res += t + 1
 	}
 
-	return res
+	return res, nil
 }
