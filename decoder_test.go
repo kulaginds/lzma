@@ -1,6 +1,7 @@
 package lzma
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"testing"
@@ -64,5 +65,23 @@ func TestDecode(t *testing.T) {
 			err = Decode(input, io.Discard)
 			tc.checkErr(err)
 		})
+	}
+}
+
+func BenchmarkDecode(b *testing.B) {
+	data, err := os.ReadFile("testassets/random.dat.lzma")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(data)))
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		err = Decode(bytes.NewReader(data), io.Discard)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }

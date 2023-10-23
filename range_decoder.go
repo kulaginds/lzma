@@ -11,6 +11,8 @@ type rangeDecoder struct {
 	Range     uint32
 	Code      uint32
 	Corrupted bool
+
+	b []byte
 }
 
 func newRangeDecoder(inStream io.Reader) *rangeDecoder {
@@ -18,6 +20,8 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 		inStream: inStream,
 
 		Range: 0xFFFFFFFF,
+
+		b: make([]byte, 1),
 	}
 }
 
@@ -57,15 +61,13 @@ const kTopValue = uint32(1) << 24
 
 func (d *rangeDecoder) Normalize() error {
 	if d.Range < kTopValue {
-		bb := make([]byte, 1)
-
-		_, err := d.inStream.Read(bb)
+		_, err := d.inStream.Read(d.b)
 		if err != nil {
 			return fmt.Errorf("read byte: %w", err)
 		}
 
 		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(bb[0])
+		d.Code = (d.Code << 8) | uint32(d.b[0])
 	}
 
 	return nil
