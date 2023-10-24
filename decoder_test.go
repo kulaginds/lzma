@@ -2,6 +2,8 @@ package lzma
 
 import (
 	"bytes"
+	"crypto/md5"
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -62,24 +64,43 @@ func TestDecode(t *testing.T) {
 			r.NoError(err)
 			defer input.Close()
 
-			err = Decode(input, io.Discard)
+			b := bytes.NewBuffer(nil)
+
+			err = Decode(input, b)
 			tc.checkErr(err)
 		})
 	}
 }
 
 func BenchmarkDecode(b *testing.B) {
-	data, err := os.ReadFile("testassets/random.dat.lzma")
+	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
 	if err != nil {
 		b.Fatal(err)
 	}
 
+	decompressedData, err := os.ReadFile("testassets/randomfile.dat")
+	if err != nil {
+		b.Fatal(err)
+	}
+	decompressedDataSum := fmt.Sprintf("%x", md5.Sum(decompressedData))
+
+	actualBuf := bytes.NewBuffer(nil)
+	err = Decode(bytes.NewReader(compressedData), actualBuf)
+	if err != nil {
+		b.Fatal(err)
+	}
+	actualSum := fmt.Sprintf("%x", md5.Sum(actualBuf.Bytes()))
+
+	if actualSum != decompressedDataSum {
+		b.Fatal("decompressed data corrupted")
+	}
+
 	b.ResetTimer()
-	b.SetBytes(int64(len(data)))
+	b.SetBytes(int64(len(compressedData)))
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err = Decode(bytes.NewReader(data), io.Discard)
+		err = Decode(bytes.NewReader(compressedData), io.Discard)
 		if err != nil {
 			b.Fatal(err)
 		}

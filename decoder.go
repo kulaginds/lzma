@@ -227,7 +227,7 @@ func (dec *Decoder) Decode() error {
 				return fmt.Errorf("decode literal: %w", err)
 			}
 
-			state = UpdateState_Literal(state)
+			state = stateUpdateLiteral(state)
 			dec.unpackSize--
 			continue
 		}
@@ -258,7 +258,7 @@ func (dec *Decoder) Decode() error {
 				}
 
 				if bit == 0 {
-					state = UpdateState_ShortRep(state)
+					state = stateUpdateShortRep(state)
 					err = dec.outWindow.PutByte(dec.outWindow.GetByte(rep0 + 1))
 					if err != nil {
 						return fmt.Errorf("put byte: %w", err)
@@ -300,7 +300,7 @@ func (dec *Decoder) Decode() error {
 				return fmt.Errorf("rep length Decoder decode: %w", err)
 			}
 
-			state = UpdateState_Rep(state)
+			state = stateUpdateRep(state)
 		} else {
 			rep3 = rep2
 			rep2 = rep1
@@ -311,7 +311,7 @@ func (dec *Decoder) Decode() error {
 				return fmt.Errorf("length Decoder decode: %w", err)
 			}
 
-			state = UpdateState_Match(state)
+			state = stateUpdateMatch(state)
 			rep0, err = dec.DecodeDistance(length)
 			if err != nil {
 				return fmt.Errorf("decode distance: %w", err)
