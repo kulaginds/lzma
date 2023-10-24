@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-type Decoder struct {
+type Decoder1 struct {
 	inStream  io.Reader
 	outStream io.Writer
 
@@ -35,8 +35,8 @@ type Decoder struct {
 	isRep0Long []uint16
 }
 
-func NewDecoder(inStream io.Reader, outStream io.Writer) *Decoder {
-	return &Decoder{
+func NewDecoder1(inStream io.Reader, outStream io.Writer) *Decoder1 {
+	return &Decoder1{
 		inStream:  inStream,
 		outStream: outStream,
 
@@ -51,7 +51,7 @@ func NewDecoder(inStream io.Reader, outStream io.Writer) *Decoder {
 
 const lzmaHeaderLen = 13
 
-func (dec *Decoder) Init() error {
+func (dec *Decoder1) Init() error {
 	header := make([]byte, lzmaHeaderLen)
 
 	n, err := dec.inStream.Read(header)
@@ -108,7 +108,7 @@ func (dec *Decoder) Init() error {
 	return nil
 }
 
-func (dec *Decoder) initDist() {
+func (dec *Decoder1) initDist() {
 	dec.posSlotDecoder = make([]*bitTreeDecoder, kNumLenToPosStates)
 
 	for i := 0; i < kNumLenToPosStates; i++ {
@@ -129,7 +129,7 @@ const (
 	ProbInitVal           = (1 << kNumBitModelTotalBits) / 2
 )
 
-func (dec *Decoder) initLiterals() {
+func (dec *Decoder1) initLiterals() {
 	num := uint32(0x300) << (dec.lc + dec.lp)
 
 	for i := uint32(0); i < num; i++ {
@@ -137,7 +137,7 @@ func (dec *Decoder) initLiterals() {
 	}
 }
 
-func (dec *Decoder) decodeUnpackSize(header []byte) error {
+func (dec *Decoder1) decodeUnpackSize(header []byte) error {
 	var b byte
 
 	for i := 0; i < 8; i++ {
@@ -159,7 +159,7 @@ const (
 	lzmaDicMax = 1<<32 - 1
 )
 
-func (dec *Decoder) decodeProperties(properties []byte) error {
+func (dec *Decoder1) decodeProperties(properties []byte) error {
 	d := properties[0]
 	if d >= (9 * 5 * 5) {
 		return ErrIncorrectProperties
@@ -190,7 +190,7 @@ func (dec *Decoder) decodeProperties(properties []byte) error {
 	return nil
 }
 
-func (dec *Decoder) Decode() error {
+func (dec *Decoder1) Decode() error {
 	var err error
 
 	var (
@@ -327,7 +327,7 @@ func (dec *Decoder) Decode() error {
 	}
 }
 
-func (dec *Decoder) DecodeLiteral(state uint32, rep0 uint32) error {
+func (dec *Decoder1) DecodeLiteral(state uint32, rep0 uint32) error {
 	prevByte := uint32(0)
 	if !dec.outWindow.IsEmpty() {
 		prevByte = uint32(dec.outWindow.GetByte(1))
@@ -366,7 +366,7 @@ func (dec *Decoder) DecodeLiteral(state uint32, rep0 uint32) error {
 	return nil
 }
 
-func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
+func (dec *Decoder1) DecodeDistance(len uint32) (uint32, error) {
 	lenState := len
 	if lenState > (kNumLenToPosStates - 1) {
 		lenState = kNumLenToPosStates - 1
@@ -395,7 +395,7 @@ func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
 }
 
 func Decode(inStream io.Reader, outStream io.Writer) error {
-	d := NewDecoder(inStream, outStream)
+	d := NewDecoder1(inStream, outStream)
 
 	err := d.Init()
 	if err != nil {
