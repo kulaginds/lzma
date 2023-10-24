@@ -1,6 +1,7 @@
 package lzma
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -12,8 +13,11 @@ type rangeDecoder struct {
 	Code      uint32
 	Corrupted bool
 
-	b []byte
+	b, btmp []byte
+	bi      int
 }
+
+const lzmaRequiredInputMax = 20
 
 func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 	return &rangeDecoder{
@@ -21,7 +25,9 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 
 		Range: 0xFFFFFFFF,
 
-		b: make([]byte, 1),
+		b:    make([]byte, lzmaRequiredInputMax),
+		btmp: make([]byte, lzmaRequiredInputMax),
+		bi:   lzmaRequiredInputMax,
 	}
 }
 
@@ -57,23 +63,59 @@ func (d *rangeDecoder) Init() (bool, error) {
 	return b == 0, nil
 }
 
-const kTopValue = uint32(1) << 24
+func (d *rangeDecoder) WarmUp() error {
+	if d.bi == 0 { // буфер полон
+		return nil
+	}
 
-func (d *rangeDecoder) Normalize() error {
-	if d.Range < kTopValue {
-		_, err := d.inStream.Read(d.b)
-		if err != nil {
-			return fmt.Errorf("read byte: %w", err)
+	if d.bi > cap(d.b) { // буфер пуст
+		d.b = d.b[:cap(d.b)]
+
+		n, err := d.inStream.Read(d.b)
+		if err != nil && !errors.Is(err, io.EOF) { // eos должен определить декодер
+			return err
 		}
 
-		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(d.b[0])
+		if n < len(d.b) {
+			d.b = d.b[:n]
+		}
+
+		return nil
+	}
+
+	// буфер частично прочитан
+
+	// сдвинуть непрочитанное вперед
+	unreadBytesCount := cap(d.b) - d.bi
+	copy(d.btmp[:cap(d.btmp)], d.b[d.bi:])
+	copy(d.b[:cap(d.b)], d.btmp[:unreadBytesCount])
+	d.bi = 0
+
+	// прочитать оставшееся
+	bufToRead := d.b[unreadBytesCount:cap(d.b)]
+	n, err := d.inStream.Read(bufToRead)
+	if err != nil && !errors.Is(err, io.EOF) { // eos должен определить декодер
+		return err
+	}
+
+	if (n + unreadBytesCount) < cap(d.b) {
+		d.b = d.b[:(n + unreadBytesCount)]
 	}
 
 	return nil
 }
 
-func (d *rangeDecoder) DecodeBit(prob *uint16) (uint32, error) {
+const kTopValue = uint32(1) << 24
+
+func (d *rangeDecoder) Normalize() {
+	if d.Range < kTopValue {
+		d.Range <<= 8
+		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
+		d.bi++
+	}
+}
+
+func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
 	v := *prob
 	bound := (d.Range >> kNumBitModelTotalBits) * uint32(v)
 
@@ -92,19 +134,14 @@ func (d *rangeDecoder) DecodeBit(prob *uint16) (uint32, error) {
 
 	*prob = v
 
-	err := d.Normalize()
-	if err != nil {
-		return 0, err
-	}
+	d.Normalize()
 
-	return symbol, nil
+	return symbol
 }
 
-func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
-	var (
-		res uint32
-		err error
-	)
+func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
+	var res uint32
+
 	for ; numBits > 0; numBits-- {
 		d.Range >>= 1
 		d.Code -= d.Range
@@ -115,14 +152,11 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 			d.Corrupted = true
 		}
 
-		err = d.Normalize()
-		if err != nil {
-			return 0, err
-		}
+		d.Normalize()
 
 		res <<= 1
 		res += t + 1
 	}
 
-	return res, nil
+	return res
 }

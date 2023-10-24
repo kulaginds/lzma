@@ -211,12 +211,14 @@ func (dec *Decoder) Decode() error {
 			}
 		}
 
+		err = dec.rangeDec.WarmUp()
+		if err != nil {
+			return err
+		}
+
 		posState = dec.outWindow.TotalPos & ((1 << dec.pb) - 1)
 
-		bit, err = dec.rangeDec.DecodeBit(&dec.isMatch[(state<<kNumPosBitsMax)+posState])
-		if err != nil {
-			return fmt.Errorf("decode bit: %w", err)
-		}
+		bit = dec.rangeDec.DecodeBit(&dec.isMatch[(state<<kNumPosBitsMax)+posState])
 		if bit == 0 {
 			if dec.unpackSizeDefined && dec.unpackSize == 0 {
 				return ErrResultError
@@ -232,11 +234,7 @@ func (dec *Decoder) Decode() error {
 			continue
 		}
 
-		bit, err = dec.rangeDec.DecodeBit(&dec.isRep[state])
-		if err != nil {
-			return fmt.Errorf("decode bit: %w", err)
-		}
-
+		bit = dec.rangeDec.DecodeBit(&dec.isRep[state])
 		if bit != 0 {
 			if dec.unpackSizeDefined && dec.unpackSize == 0 {
 				return ErrResultError
@@ -246,17 +244,9 @@ func (dec *Decoder) Decode() error {
 				return ErrResultError
 			}
 
-			bit, err = dec.rangeDec.DecodeBit(&dec.isRepG0[state])
-			if err != nil {
-				return fmt.Errorf("decode bit: %w", err)
-			}
-
+			bit = dec.rangeDec.DecodeBit(&dec.isRepG0[state])
 			if bit == 0 {
-				bit, err = dec.rangeDec.DecodeBit(&dec.isRep0Long[(state<<kNumPosBitsMax)+posState])
-				if err != nil {
-					return fmt.Errorf("decode bit: %w", err)
-				}
-
+				bit = dec.rangeDec.DecodeBit(&dec.isRep0Long[(state<<kNumPosBitsMax)+posState])
 				if bit == 0 {
 					state = stateUpdateShortRep(state)
 					err = dec.outWindow.PutByte(dec.outWindow.GetByte(rep0 + 1))
@@ -268,19 +258,11 @@ func (dec *Decoder) Decode() error {
 					continue
 				}
 			} else {
-				bit, err = dec.rangeDec.DecodeBit(&dec.isRepG1[state])
-				if err != nil {
-					return fmt.Errorf("decode bit: %w", err)
-				}
-
+				bit = dec.rangeDec.DecodeBit(&dec.isRepG1[state])
 				if bit == 0 {
 					dist = rep1
 				} else {
-					bit, err = dec.rangeDec.DecodeBit(&dec.isRepG2[state])
-					if err != nil {
-						return fmt.Errorf("decode bit: %w", err)
-					}
-
+					bit = dec.rangeDec.DecodeBit(&dec.isRepG2[state])
 					if bit == 0 {
 						dist = rep2
 					} else {
@@ -295,22 +277,14 @@ func (dec *Decoder) Decode() error {
 				rep0 = dist
 			}
 
-			length, err = dec.repLenDecoder.Decode(posState)
-			if err != nil {
-				return fmt.Errorf("rep length Decoder decode: %w", err)
-			}
-
+			length = dec.repLenDecoder.Decode(posState)
 			state = stateUpdateRep(state)
 		} else {
 			rep3 = rep2
 			rep2 = rep1
 			rep1 = rep0
 
-			length, err = dec.lenDecoder.Decode(posState)
-			if err != nil {
-				return fmt.Errorf("length Decoder decode: %w", err)
-			}
-
+			length = dec.lenDecoder.Decode(posState)
 			state = stateUpdateMatch(state)
 			rep0, err = dec.DecodeDistance(length)
 			if err != nil {
@@ -366,15 +340,13 @@ func (dec *Decoder) DecodeLiteral(state uint32, rep0 uint32) error {
 	if state >= 7 {
 		matchByte := dec.outWindow.GetByte(rep0 + 1)
 
+		var bit uint32
+
 		for symbol < 0x100 {
 			matchBit := uint32((matchByte >> 7) & 1)
 			matchByte <<= 1
 
-			bit, err := dec.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
-			if err != nil {
-				return fmt.Errorf("decode bit: %w", err)
-			}
-
+			bit = dec.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
 			symbol = (symbol << 1) | bit
 			if matchBit != bit {
 				break
@@ -383,12 +355,7 @@ func (dec *Decoder) DecodeLiteral(state uint32, rep0 uint32) error {
 	}
 
 	for symbol < 0x100 {
-		bit, err := dec.rangeDec.DecodeBit(&probs[symbol])
-		if err != nil {
-			return fmt.Errorf("decode bit: %w", err)
-		}
-
-		symbol = (symbol << 1) | bit
+		symbol = (symbol << 1) | dec.rangeDec.DecodeBit(&probs[symbol])
 	}
 
 	err := dec.outWindow.PutByte(byte(symbol - 0x100))
@@ -405,11 +372,7 @@ func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
 		lenState = kNumLenToPosStates - 1
 	}
 
-	posSlot, err := dec.posSlotDecoder[lenState].Decode()
-	if err != nil {
-		return 0, fmt.Errorf("pos slot Decoder decode: %w", err)
-	}
-
+	posSlot := dec.posSlotDecoder[lenState].Decode()
 	if posSlot < 4 {
 		return posSlot, nil
 	}
@@ -418,25 +381,13 @@ func (dec *Decoder) DecodeDistance(len uint32) (uint32, error) {
 	dist := (2 | (posSlot & 1)) << numDirectBits
 
 	if posSlot < kEndPosModelIndex {
-		locDist, err := BitTreeReverseDecode(dec.posDecoders[dist-posSlot:], int(numDirectBits), dec.rangeDec)
-		if err != nil {
-			return 0, fmt.Errorf("bit tree reverse decode: %w", err)
-		}
-
+		locDist := BitTreeReverseDecode(dec.posDecoders[dist-posSlot:], int(numDirectBits), dec.rangeDec)
 		dist += locDist
 	} else {
-		bits, err := dec.rangeDec.DecodeDirectBits(int(numDirectBits - kNumAlignBits))
-		if err != nil {
-			return 0, fmt.Errorf("decode direct bits: %w", err)
-		}
-
+		bits := dec.rangeDec.DecodeDirectBits(int(numDirectBits - kNumAlignBits))
 		dist += bits << kNumAlignBits
 
-		bits, err = dec.alignDecoder.ReverseDecode()
-		if err != nil {
-			return 0, fmt.Errorf("align reverse decode: %w", err)
-		}
-
+		bits = dec.alignDecoder.ReverseDecode()
 		dist += bits
 	}
 

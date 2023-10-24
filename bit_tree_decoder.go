@@ -1,7 +1,5 @@
 package lzma
 
-import "fmt"
-
 type bitTreeDecoder struct {
 	rc *rangeDecoder
 
@@ -22,49 +20,33 @@ func (d *bitTreeDecoder) Init() {
 	initProbs(d.probs)
 }
 
-func (d *bitTreeDecoder) Decode() (uint32, error) {
-	var (
-		b   uint32
-		err error
-	)
-
+func (d *bitTreeDecoder) Decode() uint32 {
 	m := uint32(1)
 
 	for i := 0; i < d.numBits; i++ {
-		b, err = d.rc.DecodeBit(&d.probs[m])
-		if err != nil {
-			return 0, fmt.Errorf("decode bit: %w", err)
-		}
-
-		m = (m << 1) + b
+		m = (m << 1) + d.rc.DecodeBit(&d.probs[m])
 	}
 
-	return m - (uint32(1) << d.numBits), nil
+	return m - (uint32(1) << d.numBits)
 }
 
-func (d *bitTreeDecoder) ReverseDecode() (uint32, error) {
+func (d *bitTreeDecoder) ReverseDecode() uint32 {
 	return BitTreeReverseDecode(d.probs, d.numBits, d.rc)
 }
 
-func BitTreeReverseDecode(probs []uint16, numBits int, rc *rangeDecoder) (uint32, error) {
-	var (
-		bit uint32
-		err error
-	)
+func BitTreeReverseDecode(probs []uint16, numBits int, rc *rangeDecoder) uint32 {
+	var bit uint32
 
 	m := uint32(1)
 	symbol := uint32(0)
 
 	for i := 0; i < numBits; i++ {
-		bit, err = rc.DecodeBit(&probs[m])
-		if err != nil {
-			return 0, fmt.Errorf("decode bit: %w", err)
-		}
+		bit = rc.DecodeBit(&probs[m])
 
 		m <<= 1
 		m += bit
 		symbol |= bit << i
 	}
 
-	return symbol, nil
+	return symbol
 }

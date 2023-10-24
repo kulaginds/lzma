@@ -1,7 +1,5 @@
 package lzma
 
-import "fmt"
-
 const (
 	kNumPosBitsMax = 4
 
@@ -50,24 +48,20 @@ func (d *lenDecoder) Init() {
 	d.highCoder.Init()
 }
 
-func (d *lenDecoder) Decode(posState uint32) (uint32, error) {
-	bit, err := d.rc.DecodeBit(&d.choice)
-	if err != nil {
-		return 0, fmt.Errorf("decode bit: %w", err)
-	}
-
+func (d *lenDecoder) Decode(posState uint32) uint32 {
+	bit := d.rc.DecodeBit(&d.choice)
 	if bit == 0 {
 		return d.lowCoder[posState].Decode()
 	}
 
-	bit, err = d.rc.DecodeBit(&d.choice2)
+	bit = d.rc.DecodeBit(&d.choice2)
 	if bit == 0 {
-		bit, err = d.midCoder[posState].Decode()
+		bit = d.midCoder[posState].Decode()
 
-		return 8 + bit, err
+		return 8 + bit
 	}
 
-	bit, err = d.highCoder.Decode()
+	bit = d.highCoder.Decode()
 
-	return 16 + bit, err
+	return 16 + bit
 }

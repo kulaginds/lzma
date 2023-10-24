@@ -17,10 +17,11 @@ func newWindow(outStream io.Writer, dictSize uint32) *window {
 	return &window{
 		outStream: outStream,
 
-		buf:      make([]byte, dictSize),
-		pos:      0,
-		size:     dictSize,
-		isFull:   false,
+		buf:    make([]byte, dictSize),
+		pos:    0,
+		size:   dictSize,
+		isFull: false,
+
 		TotalPos: 0,
 	}
 }

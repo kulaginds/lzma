@@ -100,7 +100,50 @@ func BenchmarkDecode(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err = Decode(bytes.NewReader(compressedData), io.Discard)
+		err = Decode(bytes.NewReader(compressedData), actualBuf)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkReader1(b *testing.B) {
+	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	decompressedData, err := os.ReadFile("testassets/randomfile.dat")
+	if err != nil {
+		b.Fatal(err)
+	}
+	decompressedDataSum := fmt.Sprintf("%x", md5.Sum(decompressedData))
+
+	actualBuf := bytes.NewBuffer(nil)
+	r, err := NewReader1(bytes.NewReader(compressedData))
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, err = io.Copy(actualBuf, r)
+	if err != nil {
+		b.Fatal(err)
+	}
+	actualSum := fmt.Sprintf("%x", md5.Sum(actualBuf.Bytes()))
+
+	if actualSum != decompressedDataSum {
+		b.Fatal("decompressed data corrupted")
+	}
+
+	b.ResetTimer()
+	b.SetBytes(int64(len(compressedData)))
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		r, err = NewReader1(bytes.NewReader(compressedData))
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = io.Copy(io.Discard, r)
 		if err != nil {
 			b.Fatal(err)
 		}
