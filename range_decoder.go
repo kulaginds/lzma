@@ -13,8 +13,10 @@ type rangeDecoder struct {
 	Code      uint32
 	Corrupted bool
 
-	b, btmp []byte
-	bi      int
+	b, btmp      []byte
+	bi           int
+	bSwapped     bool
+	bInitialized bool
 }
 
 const lzmaRequiredInputMax = 20
@@ -25,9 +27,9 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 
 		Range: 0xFFFFFFFF,
 
-		b:    make([]byte, lzmaRequiredInputMax),
-		btmp: make([]byte, lzmaRequiredInputMax),
-		bi:   lzmaRequiredInputMax,
+		b:        make([]byte, lzmaRequiredInputMax),
+		btmp:     make([]byte, lzmaRequiredInputMax),
+		bSwapped: true,
 	}
 }
 
@@ -64,43 +66,33 @@ func (d *rangeDecoder) Init() (bool, error) {
 }
 
 func (d *rangeDecoder) WarmUp() error {
-	if d.bi == 0 { // буфер полон
-		return nil
-	}
+	var (
+		n   int
+		err error
+	)
 
-	if d.bi > cap(d.b) { // буфер пуст
-		d.b = d.b[:cap(d.b)]
-
-		n, err := d.inStream.Read(d.b)
-		if err != nil && !errors.Is(err, io.EOF) { // eos должен определить декодер
+	if !d.bInitialized {
+		n, err = d.inStream.Read(d.b)
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 
-		if n < len(d.b) {
-			d.b = d.b[:n]
-		}
+		d.b = d.b[:n]
+		d.bInitialized = true
+	}
 
+	if !d.bSwapped {
 		return nil
 	}
 
-	// буфер частично прочитан
-
-	// сдвинуть непрочитанное вперед
-	unreadBytesCount := cap(d.b) - d.bi
-	copy(d.btmp[:cap(d.btmp)], d.b[d.bi:])
-	copy(d.b[:cap(d.b)], d.btmp[:unreadBytesCount])
-	d.bi = 0
-
-	// прочитать оставшееся
-	bufToRead := d.b[unreadBytesCount:cap(d.b)]
-	n, err := d.inStream.Read(bufToRead)
-	if err != nil && !errors.Is(err, io.EOF) { // eos должен определить декодер
+	d.btmp = d.btmp[:cap(d.btmp)]
+	n, err = d.inStream.Read(d.btmp)
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 
-	if (n + unreadBytesCount) < cap(d.b) {
-		d.b = d.b[:(n + unreadBytesCount)]
-	}
+	d.btmp = d.btmp[:n]
+	d.bSwapped = false
 
 	return nil
 }
@@ -128,6 +120,12 @@ func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
 
 	// Normalize
 	if d.Range < kTopValue {
+		if d.bi >= len(d.b) {
+			d.bi = 0
+			d.b, d.btmp = d.btmp, d.b
+			d.bSwapped = true
+		}
+
 		d.Range <<= 8
 		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
 		d.bi++
@@ -151,6 +149,12 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
 
 		// Normalize
 		if d.Range < kTopValue {
+			if d.bi >= len(d.b) {
+				d.bi = 0
+				d.b, d.btmp = d.btmp, d.b
+				d.bSwapped = true
+			}
+
 			d.Range <<= 8
 			d.Code = (d.Code << 8) | uint32(d.b[d.bi])
 			d.bi++
