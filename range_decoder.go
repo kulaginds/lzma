@@ -107,14 +107,6 @@ func (d *rangeDecoder) WarmUp() error {
 
 const kTopValue = uint32(1) << 24
 
-func (d *rangeDecoder) Normalize() {
-	if d.Range < kTopValue {
-		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
-		d.bi++
-	}
-}
-
 func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
 	v := *prob
 	bound := (d.Range >> kNumBitModelTotalBits) * uint32(v)
@@ -134,7 +126,12 @@ func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
 
 	*prob = v
 
-	d.Normalize()
+	// Normalize
+	if d.Range < kTopValue {
+		d.Range <<= 8
+		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
+		d.bi++
+	}
 
 	return symbol
 }
@@ -152,7 +149,12 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
 			d.Corrupted = true
 		}
 
-		d.Normalize()
+		// Normalize
+		if d.Range < kTopValue {
+			d.Range <<= 8
+			d.Code = (d.Code << 8) | uint32(d.b[d.bi])
+			d.bi++
+		}
 
 		res <<= 1
 		res += t + 1
