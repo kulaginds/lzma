@@ -47,6 +47,8 @@ func NewReader1(inStream io.Reader) (*Reader1, error) {
 	r := &Reader1{
 		inStream: inStream,
 
+		rangeDec: newRangeDecoder(inStream),
+
 		isMatch:    make([]uint16, kNumStates<<kNumPosBitsMax),
 		isRep:      make([]uint16, kNumStates),
 		isRepG0:    make([]uint16, kNumStates),
@@ -54,6 +56,8 @@ func NewReader1(inStream io.Reader) (*Reader1, error) {
 		isRepG2:    make([]uint16, kNumStates),
 		isRep0Long: make([]uint16, kNumStates<<kNumPosBitsMax),
 	}
+	r.lenDecoder = newLenDecoder(r.rangeDec)
+	r.repLenDecoder = newLenDecoder(r.rangeDec)
 
 	return r, r.initialize()
 }
@@ -81,10 +85,7 @@ func (r *Reader1) initialize() error {
 	}
 
 	r.outWindow = newWindowWithPending(r.dictSize)
-
 	r.litProbs = make([]uint16, uint32(0x300)<<(r.lc+r.lp))
-
-	r.rangeDec = newRangeDecoder(r.inStream)
 
 	var initialized bool
 
@@ -105,11 +106,7 @@ func (r *Reader1) initialize() error {
 	initProbs(r.isRepG1)
 	initProbs(r.isRepG2)
 	initProbs(r.isRep0Long)
-
-	r.lenDecoder = newLenDecoder(r.rangeDec)
 	r.lenDecoder.Init()
-
-	r.repLenDecoder = newLenDecoder(r.rangeDec)
 	r.repLenDecoder.Init()
 
 	return nil
