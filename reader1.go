@@ -8,7 +8,6 @@ import (
 type Reader1 struct {
 	inStream io.Reader
 
-	initialized       bool
 	unpackSizeDefined bool
 	markerIsMandatory bool
 
@@ -112,8 +111,6 @@ func (r *Reader1) initialize() error {
 
 	r.repLenDecoder = newLenDecoder(r.rangeDec)
 	r.repLenDecoder.Init()
-
-	r.initialized = true
 
 	return nil
 }
