@@ -92,6 +92,10 @@ func (r *Reader2) startChunk() error {
 		r.outWindow.Reset()
 	}
 
+	if r.chunkType == chunkUncompressedResetDict {
+		r.lzmaReader = nil
+	}
+
 	if isChunkUncompressed[r.chunkType] {
 		return nil
 	}
