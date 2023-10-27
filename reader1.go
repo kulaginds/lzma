@@ -187,6 +187,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 		}
 
 		s.posState = r.outWindow.TotalPos & ((1 << s.pb) - 1)
+		fmt.Println("posState", s.posState)
 
 		bit = r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState])
 		if bit == 0 {
