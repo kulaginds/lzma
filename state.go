@@ -2,6 +2,7 @@ package lzma
 
 type state struct {
 	unpackSize uint64
+	bytesLeft  uint64
 
 	unpackSizeDefined bool
 	markerIsMandatory bool
@@ -88,6 +89,7 @@ func (s *state) Reset() {
 }
 
 func (s *state) SetUnpackSize(unpackSize uint64) {
+	s.bytesLeft = unpackSize
 	s.unpackSize = unpackSize
 
 	s.unpackSizeDefined = isUnpackSizeDefined(unpackSize)

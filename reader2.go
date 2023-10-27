@@ -11,7 +11,7 @@ type Reader2 struct {
 
 	dictSize uint32
 
-	outWindow  *windowWithPending
+	outWindow  *window
 	lzmaReader *Reader1
 
 	header                []byte
@@ -40,7 +40,7 @@ func (r *Reader2) initialize() error {
 		return err
 	}
 
-	r.outWindow = newWindowWithPending(r.dictSize)
+	r.outWindow = newWindow(r.dictSize)
 
 	return r.startChunk()
 }

@@ -1,12 +1,13 @@
 package lzma
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
 
 type Reader1 struct {
-	outWindow *windowWithPending
+	outWindow *window
 	rangeDec  *rangeDecoder
 
 	s *state
@@ -20,7 +21,7 @@ func NewReader1(inStream io.Reader) (*Reader1, error) {
 	return r, r.initializeFull(inStream)
 }
 
-func NewReader1WithOptions(inStream io.Reader, prop byte, unpackSize uint64, outWindow *windowWithPending) (*Reader1, error) {
+func NewReader1WithOptions(inStream io.Reader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
 	r := &Reader1{
 		outWindow: outWindow,
 		rangeDec:  newRangeDecoder(inStream),
@@ -54,7 +55,7 @@ func (r *Reader1) initializeFull(inStream io.Reader) error {
 		return fmt.Errorf("decode dict size: %w", err)
 	}
 
-	r.outWindow = newWindowWithPending(dictSize)
+	r.outWindow = newWindow(dictSize)
 
 	unpackSize := r.decodeUnpackSize(header[5:])
 
@@ -139,182 +140,191 @@ func decodeProp(d byte) (uint8, uint8, uint8) {
 }
 
 func (r *Reader1) Read(p []byte) (n int, err error) {
-	s := r.s
+	var (
+		k      int
+		decErr error
+	)
 
-	if r.outWindow.HasPending() {
-		n, err = r.outWindow.ReadPending(p)
-		if err != nil {
-			return n, err
+	for {
+		if r.outWindow.HasPending() {
+			k, err = r.outWindow.ReadPending(p[n:])
+			n += k
+			if err != nil {
+				return n, err
+			}
+
+			if n >= len(p) {
+				return
+			}
 		}
 
-		if n >= len(p) {
+		if errors.Is(decErr, io.EOF) {
+			err = decErr
+
 			return
 		}
 
-		p = p[n:]
+		decErr = r.decompress()
+		if decErr != nil && !errors.Is(decErr, io.EOF) {
+			err = decErr
+
+			return
+		}
+	}
+}
+
+func (r *Reader1) decompress() (err error) {
+	for r.outWindow.Available() >= maxMatchLen {
+		if r.rangeDec.IsFinishedOK() {
+			err = io.EOF
+
+			break
+		}
+
+		err = r.rangeDec.WarmUp()
+		if err != nil {
+			return err
+		}
+
+		err = r.decodeOperation()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
 	}
 
-	if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory && r.rangeDec.IsFinishedOK() {
-		return 0, io.EOF
-	}
+	return
+}
 
-	targetUnpackSize := s.unpackSize - uint64(len(p))
-	if s.unpackSize < uint64(len(p)) {
-		targetUnpackSize = 0
-	}
+func (r *Reader1) decodeOperation() error {
+	var err error
 
+	s := r.s
 	bit := uint32(0)
 	length := uint32(0)
 	dist := uint32(0)
 	isError := false
 	fullState := uint32(0)
 
-	for {
-		if s.unpackSize <= targetUnpackSize {
-			break
+	if r.rangeDec.IsFinishedOK() {
+		return io.EOF
+	}
+
+	s.posState = r.outWindow.TotalPos & s.posMask
+	fullState = (s.state << kNumPosBitsMax) | s.posState
+
+	bit = r.rangeDec.DecodeBit(&s.isMatch[fullState])
+	if bit == 0 { // literal
+		fmt.Print("l")
+		if s.unpackSizeDefined && s.bytesLeft == 0 {
+			return ErrResultError
 		}
 
-		if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory {
+		err = r.DecodeLiteral(s.state, s.rep0)
+		if err != nil {
+			return fmt.Errorf("decode literal: %w", err)
+		}
+
+		s.state = stateUpdateLiteral(s.state)
+		s.bytesLeft--
+
+		return nil
+	}
+
+	if r.outWindow.IsEmpty() {
+		return ErrResultError
+	}
+
+	bit = r.rangeDec.DecodeBit(&s.isRep[s.state])
+	if bit == 0 { // simple match
+		fmt.Print("m")
+		s.rep3 = s.rep2
+		s.rep2 = s.rep1
+		s.rep1 = s.rep0
+
+		length = s.lenDecoder.Decode(r.rangeDec, s.posState)
+
+		s.state = stateUpdateMatch(s.state)
+		s.rep0, err = r.DecodeDistance(length)
+		if err != nil {
+			return fmt.Errorf("decode distance: %w", err)
+		}
+
+		if s.rep0 == 0xFFFFFFFF {
 			if r.rangeDec.IsFinishedOK() {
-				err = io.EOF
-
-				break
-			}
-		}
-
-		err = r.rangeDec.WarmUp()
-		if err != nil {
-			return 0, err
-		}
-
-		s.posState = r.outWindow.pos & s.posMask
-		fullState = (s.state << kNumPosBitsMax) | s.posState
-
-		bit = r.rangeDec.DecodeBit(&s.isMatch[fullState])
-		if bit == 0 {
-			if s.unpackSizeDefined && s.unpackSize == 0 {
-				return 0, ErrResultError
-			}
-
-			err = r.DecodeLiteral(s.state, s.rep0)
-			if err != nil {
-				return 0, fmt.Errorf("decode literal: %w", err)
-			}
-
-			s.state = stateUpdateLiteral(s.state)
-			s.unpackSize--
-			continue
-		}
-
-		bit = r.rangeDec.DecodeBit(&s.isRep[s.state])
-		if bit != 0 {
-			if s.unpackSizeDefined && s.unpackSize == 0 {
-				return 0, ErrResultError
-			}
-
-			if r.outWindow.IsEmpty() {
-				return 0, ErrResultError
-			}
-
-			bit = r.rangeDec.DecodeBit(&s.isRepG0[s.state])
-			if bit == 0 {
-				bit = r.rangeDec.DecodeBit(&s.isRep0Long[fullState])
-
-				if bit == 0 {
-					s.state = stateUpdateShortRep(s.state)
-					r.outWindow.PutByte(r.outWindow.GetByte(s.rep0 + 1))
-					s.unpackSize--
-
-					continue
-				}
+				return io.EOF
 			} else {
-				bit = r.rangeDec.DecodeBit(&s.isRepG1[s.state])
+				return ErrResultError
+			}
+		}
+
+		if s.unpackSizeDefined && s.bytesLeft == 0 && !s.markerIsMandatory {
+			return ErrResultError
+		}
+
+		if s.rep0 >= r.outWindow.size || !r.outWindow.CheckDistance(s.rep0) {
+			return ErrResultError
+		}
+	} else { // rep match
+		if s.unpackSizeDefined && s.bytesLeft == 0 {
+			return ErrResultError
+		}
+
+		bit = r.rangeDec.DecodeBit(&s.isRepG0[s.state])
+		if bit == 0 { // short rep match
+			fmt.Print("s")
+			bit = r.rangeDec.DecodeBit(&s.isRep0Long[fullState])
+
+			if bit == 0 {
+				s.state = stateUpdateShortRep(s.state)
+				r.outWindow.PutByte(r.outWindow.GetByte(s.rep0 + 1))
+				s.bytesLeft--
+
+				return nil
+			}
+		} else { // rep match
+			fmt.Print("r")
+			bit = r.rangeDec.DecodeBit(&s.isRepG1[s.state])
+			if bit == 0 {
+				dist = s.rep1
+			} else {
+				bit = r.rangeDec.DecodeBit(&s.isRepG2[s.state])
 				if bit == 0 {
-					dist = s.rep1
+					dist = s.rep2
 				} else {
-					bit = r.rangeDec.DecodeBit(&s.isRepG2[s.state])
-					if bit == 0 {
-						dist = s.rep2
-					} else {
-						dist = s.rep3
-						s.rep3 = s.rep2
-					}
-
-					s.rep2 = s.rep1
+					dist = s.rep3
+					s.rep3 = s.rep2
 				}
 
-				s.rep1 = s.rep0
-				s.rep0 = dist
+				s.rep2 = s.rep1
 			}
 
-			length = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
-
-			s.state = stateUpdateRep(s.state)
-		} else {
-			s.rep3 = s.rep2
-			s.rep2 = s.rep1
 			s.rep1 = s.rep0
-
-			length = s.lenDecoder.Decode(r.rangeDec, s.posState)
-
-			s.state = stateUpdateMatch(s.state)
-			s.rep0, err = r.DecodeDistance(length)
-			if err != nil {
-				return 0, fmt.Errorf("decode distance: %w", err)
-			}
-
-			if s.rep0 == 0xFFFFFFFF {
-				if r.rangeDec.IsFinishedOK() {
-					if s.unpackSizeDefined && s.unpackSize != 0 && !s.markerIsMandatory {
-						return 0, ErrResultError
-					}
-
-					err = io.EOF
-
-					break
-				} else {
-					return 0, ErrResultError
-				}
-			}
-
-			if s.unpackSizeDefined && s.unpackSize == 0 {
-				return 0, ErrResultError
-			}
-
-			if s.rep0 >= r.outWindow.size || !r.outWindow.CheckDistance(s.rep0) {
-				return 0, ErrResultError
-			}
+			s.rep0 = dist
 		}
 
-		length += kMatchMinLen
-		if s.unpackSizeDefined && uint32(s.unpackSize) < length {
-			length = uint32(s.unpackSize)
-			isError = true
-		}
+		length = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
 
-		r.outWindow.CopyMatch(s.rep0+1, length)
-
-		s.unpackSize -= uint64(length)
-
-		if isError {
-			return 0, ErrResultError
-		}
+		s.state = stateUpdateRep(s.state)
 	}
 
-	if r.outWindow.HasPending() {
-		oldN := n
-		oldErr := err
-
-		n, err = r.outWindow.ReadPending(p)
-		n += oldN
-		if err != nil {
-			return n, err
-		}
-
-		err = oldErr
+	length += kMatchMinLen
+	if s.unpackSizeDefined && uint32(s.bytesLeft) < length {
+		length = uint32(s.bytesLeft)
+		isError = true
 	}
 
-	return
+	r.outWindow.CopyMatch(s.rep0+1, length)
+
+	s.bytesLeft -= uint64(length)
+
+	if isError {
+		return ErrResultError
+	}
+
+	return nil
 }
 
 func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
@@ -325,7 +335,7 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 
 	s := r.s
 	symbol := uint32(1)
-	litState := ((r.outWindow.pos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
+	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
 	probs := s.litProbs[(uint32(0x300) * litState):]
 
 	if state >= 7 {

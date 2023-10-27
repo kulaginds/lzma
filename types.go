@@ -29,6 +29,14 @@ const lzmaRequiredInputMax = 20
 
 const rangeDecoderHeaderLen = 5
 
+// minMatchLen and maxMatchLen give the minimum and maximum values for
+// encoding and decoding length values. minMatchLen is also used as base
+// for the encoded length values.
+const (
+	minMatchLen = 2
+	maxMatchLen = minMatchLen + 16 + 256 - 1
+)
+
 type chunkType int
 
 const (
