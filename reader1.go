@@ -186,8 +186,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 
-		s.posState = r.outWindow.TotalPos & ((1 << s.pb) - 1)
-		fmt.Println("posState", s.posState)
+		s.posState = r.outWindow.pos & ((1 << s.pb) - 1)
 
 		bit = r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState])
 		if bit == 0 {
@@ -325,7 +324,7 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 
 	s := r.s
 	symbol := uint32(1)
-	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
+	litState := ((r.outWindow.pos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
 	probs := s.litProbs[(uint32(0x300) * litState):]
 
 	if state >= 7 {
