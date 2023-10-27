@@ -1,37 +1,36 @@
 package lzma
 
 type bitTreeDecoder struct {
-	rc *rangeDecoder
-
 	probs   []uint16
 	numBits int
 }
 
-func newBitTreeDecoder(rc *rangeDecoder, numBits int) *bitTreeDecoder {
-	return &bitTreeDecoder{
-		rc: rc,
-
+func newBitTreeDecoder(numBits int) *bitTreeDecoder {
+	d := &bitTreeDecoder{
 		numBits: numBits,
 		probs:   make([]uint16, uint(1)<<numBits),
 	}
+	d.Reset()
+
+	return d
 }
 
-func (d *bitTreeDecoder) Init() {
+func (d *bitTreeDecoder) Reset() {
 	initProbs(d.probs)
 }
 
-func (d *bitTreeDecoder) Decode() uint32 {
+func (d *bitTreeDecoder) Decode(rc *rangeDecoder) uint32 {
 	m := uint32(1)
 
 	for i := 0; i < d.numBits; i++ {
-		m = (m << 1) + d.rc.DecodeBit(&d.probs[m])
+		m = (m << 1) + rc.DecodeBit(&d.probs[m])
 	}
 
 	return m - (uint32(1) << d.numBits)
 }
 
-func (d *bitTreeDecoder) ReverseDecode() uint32 {
-	return BitTreeReverseDecode(d.probs, d.numBits, d.rc)
+func (d *bitTreeDecoder) ReverseDecode(rc *rangeDecoder) uint32 {
+	return BitTreeReverseDecode(d.probs, d.numBits, rc)
 }
 
 func BitTreeReverseDecode(probs []uint16, numBits int, rc *rangeDecoder) uint32 {

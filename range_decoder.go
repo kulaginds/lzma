@@ -19,8 +19,6 @@ type rangeDecoder struct {
 	bInitialized bool
 }
 
-const lzmaRequiredInputMax = 20
-
 func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 	return &rangeDecoder{
 		inStream: inStream,
@@ -36,8 +34,6 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 func (d *rangeDecoder) IsFinishedOK() bool {
 	return d.Code == 0
 }
-
-const rangeDecoderHeaderLen = 5
 
 func (d *rangeDecoder) Init() (bool, error) {
 	header := make([]byte, rangeDecoderHeaderLen)
@@ -96,8 +92,6 @@ func (d *rangeDecoder) WarmUp() error {
 
 	return nil
 }
-
-const kTopValue = uint32(1) << 24
 
 func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
 	v := *prob

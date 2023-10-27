@@ -1,2 +1,4 @@
 *.lzma
+*.lzma2
 !testassets/*.lzma
+!testassets/*.lzma2

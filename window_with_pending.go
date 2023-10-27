@@ -1,5 +1,7 @@
 package lzma
 
+import "io"
+
 type windowWithPending struct {
 	buf    []byte
 	pos    uint32
@@ -73,4 +75,27 @@ func (w *windowWithPending) ReadPending(p []byte) (int, error) {
 	w.pending -= minLen
 
 	return int(minLen), nil
+}
+
+func (w *windowWithPending) Reset() {
+	w.pos = 0
+	w.isFull = false
+	w.TotalPos = 0
+	w.pending = 0
+}
+
+func (w *windowWithPending) ReadFrom(r io.Reader) (n int64, err error) {
+	var nn int
+
+	nn, err = r.Read(w.buf[w.pos:])
+	w.pos += uint32(nn)
+	w.TotalPos += uint32(nn)
+	w.pending += uint32(nn)
+
+	if w.pos == w.size {
+		w.pos = 0
+		w.isFull = true
+	}
+
+	return n, err
 }

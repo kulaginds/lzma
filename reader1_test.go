@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDecode(t *testing.T) {
+func TestReader1(t *testing.T) {
 	r := require.New(t)
 
 	testCases := []struct {
@@ -19,42 +19,50 @@ func TestDecode(t *testing.T) {
 
 		inputFile string
 
-		checkErr func(err error, msgAndArgs ...interface{})
+		checkErr1 func(err error, msgAndArgs ...interface{})
+		checkErr2 func(err error, msgAndArgs ...interface{})
 	}{
 		{
 			name:      "correct_file_with_size",
 			inputFile: "testassets/a.lzma",
-			checkErr:  r.NoError,
+			checkErr1: r.NoError,
+			checkErr2: r.NoError,
 		},
 		{
 			name:      "correct_file_with_eos",
 			inputFile: "testassets/a_eos.lzma",
-			checkErr:  r.NoError,
+			checkErr1: r.NoError,
+			checkErr2: r.NoError,
 		},
 		{
 			name:      "correct_file_with_eos_and_size",
 			inputFile: "testassets/a_eos_and_size.lzma",
-			checkErr:  r.NoError,
+			checkErr1: r.NoError,
+			checkErr2: r.NoError,
 		},
 		{
 			name:      "correct_file_lp1_lc2_pb1",
 			inputFile: "testassets/a_lp1_lc2_pb1.lzma",
-			checkErr:  r.NoError,
+			checkErr1: r.NoError,
+			checkErr2: r.NoError,
 		},
 		{
 			name:      "bad_file",
 			inputFile: "testassets/bad_corrupted.lzma",
-			checkErr:  r.Error,
+			checkErr1: r.NoError,
+			checkErr2: r.Error,
 		},
-		//{
-		//	name:      "bad_file_with_eos_and_incorrect_size",
-		//	inputFile: "testassets/bad_eos_incorrect_size.lzma",
-		//	checkErr:  r.Error,
-		//},
+		{
+			name:      "bad_file_with_eos_and_incorrect_size",
+			inputFile: "testassets/bad_eos_incorrect_size.lzma",
+			checkErr1: r.NoError,
+			checkErr2: r.Error,
+		},
 		{
 			name:      "bad_file_with_incorrect_size",
 			inputFile: "testassets/bad_incorrect_size.lzma",
-			checkErr:  r.Error,
+			checkErr1: r.NoError,
+			checkErr2: r.Error,
 		},
 	}
 
@@ -64,55 +72,45 @@ func TestDecode(t *testing.T) {
 			r.NoError(err)
 			defer input.Close()
 
-			b := bytes.NewBuffer(nil)
+			reader, err := NewReader1(input)
+			tc.checkErr1(err)
 
-			err = Decode(input, b)
-			tc.checkErr(err)
+			_, err = io.Copy(io.Discard, reader)
+			tc.checkErr2(err)
 		})
 	}
 }
 
-func TestDecodeWithFileVerification(t *testing.T) {
+func TestReader1WithFileVerification(t *testing.T) {
 	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decompressedData, err := os.ReadFile("testassets/randomfile.dat")
+	actualSummator := md5.New()
+	r, err := NewReader1(bytes.NewReader(compressedData))
 	if err != nil {
 		t.Fatal(err)
 	}
-	decompressedDataSum := fmt.Sprintf("%x", md5.Sum(decompressedData))
-
-	actualBuf := bytes.NewBuffer(nil)
-	err = Decode(bytes.NewReader(compressedData), actualBuf)
+	_, err = io.Copy(actualSummator, r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	actualSum := fmt.Sprintf("%x", md5.Sum(actualBuf.Bytes()))
+	actualSum := fmt.Sprintf("%x", actualSummator.Sum(nil))
 
-	if actualSum != decompressedDataSum {
+	if actualSum != randomFileMD5 {
 		t.Fatal("decompressed data corrupted")
 	}
 }
 
-func BenchmarkDecode(b *testing.B) {
-	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
-	if err != nil {
-		b.Fatal(err)
-	}
+const randomFileMD5 = "b2d18c4275c394a729607ff9fe0caae7"
 
-	b.ResetTimer()
-	b.SetBytes(int64(len(compressedData)))
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		err = Decode(bytes.NewReader(compressedData), io.Discard)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
+// goos: darwin
+// goarch: amd64
+// pkg: github.com/kulaginds/lzma
+// cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
+// BenchmarkReader1
+// BenchmarkReader1-12    	      12	  98883890 ns/op	  10.75 MB/s	 8411634 B/op	     168 allocs/op
 
 func BenchmarkReader1(b *testing.B) {
 	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
