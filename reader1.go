@@ -140,10 +140,6 @@ func decodeProp(d byte) (uint8, uint8, uint8) {
 func (r *Reader1) Read(p []byte) (n int, err error) {
 	s := r.s
 
-	if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory && r.rangeDec.IsFinishedOK() {
-		return 0, io.EOF
-	}
-
 	if r.outWindow.HasPending() {
 		n, err = r.outWindow.ReadPending(p)
 		if err != nil {
@@ -155,6 +151,10 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 		}
 
 		p = p[n:]
+	}
+
+	if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory && r.rangeDec.IsFinishedOK() {
+		return 0, io.EOF
 	}
 
 	targetUnpackSize := s.unpackSize - uint64(len(p))
