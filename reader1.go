@@ -167,6 +167,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 	length := uint32(0)
 	dist := uint32(0)
 	isError := false
+	fullState := uint32(0)
 
 	for {
 		if s.unpackSize <= targetUnpackSize {
@@ -186,10 +187,12 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 
-		s.posState = r.outWindow.pos & ((1 << s.pb) - 1)
+		s.posState = r.outWindow.pos & s.posMask
+		fullState = (s.state << kNumPosBitsMax) | s.posState
 
-		bit = r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState])
+		bit = r.rangeDec.DecodeBit(&s.isMatch[fullState])
 		if bit == 0 {
+			fmt.Println("lit")
 			if s.unpackSizeDefined && s.unpackSize == 0 {
 				return 0, ErrResultError
 			}
@@ -205,7 +208,6 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 		}
 
 		bit = r.rangeDec.DecodeBit(&s.isRep[s.state])
-
 		if bit != 0 {
 			if s.unpackSizeDefined && s.unpackSize == 0 {
 				return 0, ErrResultError
@@ -217,7 +219,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 
 			bit = r.rangeDec.DecodeBit(&s.isRepG0[s.state])
 			if bit == 0 {
-				bit = r.rangeDec.DecodeBit(&s.isRep0Long[(s.state<<kNumPosBitsMax)+s.posState])
+				bit = r.rangeDec.DecodeBit(&s.isRep0Long[fullState])
 
 				if bit == 0 {
 					s.state = stateUpdateShortRep(s.state)
@@ -291,6 +293,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			isError = true
 		}
 
+		fmt.Println("match")
 		r.outWindow.CopyMatch(s.rep0+1, length)
 
 		s.unpackSize -= uint64(length)

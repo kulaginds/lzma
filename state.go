@@ -8,6 +8,8 @@ type state struct {
 
 	lc, pb, lp uint8
 
+	posMask uint32
+
 	posSlotDecoder []*bitTreeDecoder
 	alignDecoder   *bitTreeDecoder
 	lenDecoder     *lenDecoder
@@ -33,6 +35,8 @@ func newState(lc, pb, lp uint8) *state {
 		lc: lc,
 		pb: pb,
 		lp: lp,
+
+		posMask: (1 << pb) - 1,
 
 		lenDecoder:     newLenDecoder(),
 		repLenDecoder:  newLenDecoder(),
