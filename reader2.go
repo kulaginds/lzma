@@ -76,6 +76,23 @@ func (r *Reader2) startChunk() error {
 		return nil
 	}
 
+	chunkName := "unknown"
+	switch r.chunkType {
+	case chunkUncompressedResetDict:
+		chunkName = "chunkUncompressedResetDict"
+	case chunkUncompressedNoResetDict:
+		chunkName = "chunkUncompressedNoResetDict"
+	case chunkLZMANoReset:
+		chunkName = "chunkLZMANoReset"
+	case chunkLZMAResetState:
+		chunkName = "chunkLZMAResetState"
+	case chunkLZMAResetStateNewProp:
+		chunkName = "chunkLZMAResetStateNewProp"
+	case chunkLZMAResetStateNewPropResetDict:
+		chunkName = "chunkLZMAResetStateNewPropResetDict"
+	}
+	fmt.Println(chunkName)
+
 	_, err = r.inStream.Read(r.header[1:chunkLength(r.chunkType)])
 	if err != nil {
 		if errors.Is(err, io.EOF) {
