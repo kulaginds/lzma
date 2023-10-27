@@ -100,13 +100,17 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = (uint16(r.header[3]) << 8) | uint16(r.header[4])
 	r.chunkCompressedSize++
 
-	if r.lzmaReader == nil {
+	if r.lzmaReader == nil && isChunkNewProp[r.chunkType] {
 		r.lzmaReader, err = NewReader1WithOptions(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
 		if err != nil {
 			return err
 		}
 
 		return nil
+	}
+
+	if r.lzmaReader == nil {
+		return ErrNoLZMAReader
 	}
 
 	if isChunkNewProp[r.chunkType] {
