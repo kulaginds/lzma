@@ -192,7 +192,6 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 
 		bit = r.rangeDec.DecodeBit(&s.isMatch[fullState])
 		if bit == 0 {
-			fmt.Println("lit")
 			if s.unpackSizeDefined && s.unpackSize == 0 {
 				return 0, ErrResultError
 			}
@@ -293,7 +292,6 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			isError = true
 		}
 
-		fmt.Println("match")
 		r.outWindow.CopyMatch(s.rep0+1, length)
 
 		s.unpackSize -= uint64(length)
