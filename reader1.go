@@ -147,7 +147,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			return n, err
 		}
 
-		if n == len(p) {
+		if n >= len(p) {
 			return
 		}
 
@@ -169,7 +169,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 	isError := false
 
 	for {
-		if s.unpackSize < targetUnpackSize {
+		if s.unpackSize <= targetUnpackSize {
 			break
 		}
 
