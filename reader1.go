@@ -81,8 +81,9 @@ func (r *Reader1) Reset() {
 	r.s.Reset()
 }
 
-func (r *Reader1) Reopen(inStream io.Reader) error {
+func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
 	r.rangeDec = newRangeDecoder(inStream)
+	r.s.SetUnpackSize(unpackSize)
 
 	initialized, err := r.rangeDec.Init()
 	if err != nil {

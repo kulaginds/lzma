@@ -92,10 +92,6 @@ func (r *Reader2) startChunk() error {
 		r.outWindow.Reset()
 	}
 
-	if r.chunkType == chunkUncompressedResetDict {
-		r.lzmaReader = nil
-	}
-
 	if isChunkUncompressed[r.chunkType] {
 		return nil
 	}
@@ -104,7 +100,7 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = (uint16(r.header[3]) << 8) | uint16(r.header[4])
 	r.chunkCompressedSize++
 
-	if r.lzmaReader == nil && isChunkNewProp[r.chunkType] {
+	if r.lzmaReader == nil {
 		r.lzmaReader, err = NewReader1WithOptions(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
 		if err != nil {
 			return err
@@ -113,23 +109,16 @@ func (r *Reader2) startChunk() error {
 		return nil
 	}
 
-	if r.lzmaReader == nil {
-		return ErrNoLZMAReader
-	}
-
-	if isChunkNewProp[r.chunkType] {
+	switch r.chunkType {
+	case chunkLZMAResetState:
+		r.lzmaReader.s.Reset()
+	case chunkLZMAResetStateNewProp, chunkLZMAResetStateNewPropResetDict:
 		lc, pb, lp := decodeProp(r.header[5])
 
 		r.lzmaReader.s = newState(lc, pb, lp)
 	}
 
-	if r.chunkType == chunkLZMAResetState {
-		r.lzmaReader.s.Reset()
-	}
-
-	r.lzmaReader.s.SetUnpackSize(uint64(r.chunkUncompressedSize))
-
-	err = r.lzmaReader.Reopen(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)))
+	err = r.lzmaReader.Reopen(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), uint64(r.chunkUncompressedSize))
 	if err != nil {
 		return err
 	}
