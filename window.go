@@ -100,9 +100,5 @@ func (w *window) ReadFrom(r io.Reader) (n int64, err error) {
 }
 
 func (w *window) Available() int {
-	if w.isFull {
-		return 0
-	}
-
-	return int(w.size - w.pos)
+	return int(w.size - w.pending)
 }

@@ -110,7 +110,7 @@ const randomFileMD5 = "b2d18c4275c394a729607ff9fe0caae7"
 // pkg: github.com/kulaginds/lzma
 // cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 // BenchmarkReader1
-// BenchmarkReader1-12    	      12	  98883890 ns/op	  10.75 MB/s	 8411634 B/op	     168 allocs/op
+// BenchmarkReader1-12    	      10	 108054990 ns/op	   9.84 MB/s	 8411611 B/op	     169 allocs/op
 
 func BenchmarkReader1(b *testing.B) {
 	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")

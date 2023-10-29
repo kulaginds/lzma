@@ -74,9 +74,9 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = 0
 
 	r.chunkType = decodeChunkType(r.header[0])
+	//chunkCounter++
 	//printChunk(r.chunkType)
-	chunkCounter++
-	opCounter = 0
+	//opCounter = 0
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
@@ -151,7 +151,7 @@ func printChunk(chunkType chunkType) {
 		name = "cLRND"
 	}
 
-	fmt.Print(name)
+	fmt.Println(name, chunkCounter)
 }
 
 func decodeChunkType(chunkCode byte) chunkType {
@@ -197,6 +197,11 @@ func chunkLength(chunkType chunkType) int {
 
 func (r *Reader2) Read(p []byte) (n int, err error) {
 	var k int
+
+	//if chunkCounter == 69 {
+	//	a := 4
+	//	_ = a
+	//}
 
 	for n < len(p) {
 		switch r.chunkType {

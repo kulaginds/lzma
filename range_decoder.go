@@ -25,8 +25,8 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 
 		Range: 0xFFFFFFFF,
 
-		b:        make([]byte, lzmaRequiredInputMax),
-		btmp:     make([]byte, lzmaRequiredInputMax),
+		b:        make([]byte, lzmaRequiredInputMax+1),
+		btmp:     make([]byte, lzmaRequiredInputMax+1),
 		bSwapped: true,
 	}
 }

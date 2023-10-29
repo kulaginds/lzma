@@ -85,6 +85,7 @@ func (r *Reader1) Reset() {
 }
 
 func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
+	r.isEndOfStream = false
 	r.rangeDec = newRangeDecoder(inStream)
 	r.s.SetUnpackSize(unpackSize)
 
@@ -197,13 +198,13 @@ func (r *Reader1) decompress() (err error) {
 	return
 }
 
-var opCounter int64 = 0
-
 func printOp(op string) {
-	//if chunkCounter == 6 {
+	//if chunkCounter == 69 {
 	//	fmt.Print(op)
 	//}
 }
+
+var opCounter = int64(0)
 
 func (r *Reader1) decodeOperation() error {
 	var err error
@@ -217,13 +218,7 @@ func (r *Reader1) decodeOperation() error {
 	}
 
 	s.posState = r.outWindow.TotalPos & s.posMask
-
 	opCounter++
-	if chunkCounter == 0 && opCounter == 79 {
-		a := 4
-		_ = a
-		//fmt.Print(s.posState)
-	}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
 		printOp("l")
