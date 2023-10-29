@@ -1,13 +1,14 @@
 package lzma
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 )
 
 type Reader2 struct {
-	inStream io.Reader
+	inStream *bufio.Reader
 
 	dictSize uint32
 
@@ -25,8 +26,13 @@ type Reader2 struct {
 }
 
 func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
+	br, ok := inStream.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(inStream)
+	}
+
 	r := &Reader2{
-		inStream: inStream,
+		inStream: br,
 
 		dictSize: uint32(dictSize),
 
@@ -37,8 +43,13 @@ func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
 }
 
 func NewReader2ForSevenZip(inStream io.Reader, props []byte) (*Reader2, error) {
+	br, ok := inStream.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(inStream)
+	}
+
 	r := &Reader2{
-		inStream: inStream,
+		inStream: br,
 
 		dictSize: DecodeDictSize2(props[0]),
 
@@ -72,7 +83,9 @@ func (r *Reader2) validateDictSize() error {
 }
 
 func (r *Reader2) startChunk() error {
-	_, err := r.inStream.Read(r.header[0:1])
+	var err error
+
+	r.header[0], err = r.inStream.ReadByte()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			err = io.ErrUnexpectedEOF
@@ -92,7 +105,7 @@ func (r *Reader2) startChunk() error {
 		return nil
 	}
 
-	_, err = r.inStream.Read(r.header[1:chunkLength(r.chunkType)])
+	_, err = io.ReadFull(r.inStream, r.header[1:chunkLength(r.chunkType)])
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			err = io.ErrUnexpectedEOF
@@ -117,7 +130,7 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize++
 
 	if r.lzmaReader == nil {
-		r.lzmaReader, err = NewReader1ForReader2(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
+		r.lzmaReader, err = NewReader1ForReader2(limitByteReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
 		if err != nil {
 			return err
 		}
@@ -143,7 +156,7 @@ func (r *Reader2) startChunk() error {
 		r.lzmaReader.s = newState(lc, pb, lp)
 	}
 
-	err = r.lzmaReader.Reopen(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), uint64(r.chunkUncompressedSize))
+	err = r.lzmaReader.Reopen(limitByteReader(r.inStream, int64(r.chunkCompressedSize)), uint64(r.chunkUncompressedSize))
 	if err != nil {
 		return err
 	}
@@ -218,11 +231,6 @@ func chunkLength(chunkType chunkType) int {
 
 func (r *Reader2) Read(p []byte) (n int, err error) {
 	var k int
-
-	//if chunkCounter == 69 {
-	//	a := 4
-	//	_ = a
-	//}
 
 	for n < len(p) {
 		switch r.chunkType {

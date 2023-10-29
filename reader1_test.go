@@ -1,6 +1,7 @@
 package lzma
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/md5"
 	"fmt"
@@ -72,7 +73,7 @@ func TestReader1(t *testing.T) {
 			r.NoError(err)
 			defer input.Close()
 
-			reader, err := NewReader1(input)
+			reader, err := NewReader1(bufio.NewReader(input))
 			tc.checkErr1(err)
 
 			_, err = io.Copy(io.Discard, reader)

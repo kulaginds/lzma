@@ -40,14 +40,30 @@ func (d *lenDecoder) Reset() {
 	}
 }
 
-func (d *lenDecoder) Decode(rc *rangeDecoder, posState uint32) uint32 {
-	if rc.DecodeBit(&d.choice) == 0 {
+func (d *lenDecoder) Decode(rc *rangeDecoder, posState uint32) (uint32, error) {
+	bit, err := rc.DecodeBit(&d.choice)
+	if err != nil {
+		return 0, err
+	}
+	if bit == 0 {
 		return d.lowCoder[posState].Decode(rc)
 	}
 
-	if rc.DecodeBit(&d.choice2) == 0 {
-		return 8 + d.midCoder[posState].Decode(rc)
+	bit, err = rc.DecodeBit(&d.choice2)
+	if err != nil {
+		return 0, err
+	}
+	if bit == 0 {
+		bit, err = d.midCoder[posState].Decode(rc)
+		if err != nil {
+			return 0, err
+		}
+		return 8 + bit, nil
 	}
 
-	return 16 + d.highCoder.Decode(rc)
+	bit, err = d.highCoder.Decode(rc)
+	if err != nil {
+		return 0, err
+	}
+	return 16 + bit, nil
 }

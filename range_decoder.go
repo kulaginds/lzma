@@ -1,33 +1,22 @@
 package lzma
 
 import (
-	"errors"
-	"fmt"
 	"io"
 )
 
 type rangeDecoder struct {
-	inStream io.Reader
+	inStream io.ByteReader
 
 	Range     uint32
 	Code      uint32
 	Corrupted bool
-
-	b, btmp      []byte
-	bi           int
-	bSwapped     bool
-	bInitialized bool
 }
 
-func newRangeDecoder(inStream io.Reader) *rangeDecoder {
+func newRangeDecoder(inStream io.ByteReader) *rangeDecoder {
 	return &rangeDecoder{
 		inStream: inStream,
 
 		Range: 0xFFFFFFFF,
-
-		b:        make([]byte, lzmaRequiredInputMax+1),
-		btmp:     make([]byte, lzmaRequiredInputMax+1),
-		bSwapped: true,
 	}
 }
 
@@ -36,118 +25,36 @@ func (d *rangeDecoder) IsFinishedOK() bool {
 }
 
 func (d *rangeDecoder) Init() error {
-	header := make([]byte, rangeDecoderHeaderLen)
-
-	n, err := d.inStream.Read(header)
+	b, err := d.inStream.ReadByte()
 	if err != nil {
-		return fmt.Errorf("inStream.Read: %w", err)
+		return err
 	}
-
-	if n != rangeDecoderHeaderLen {
-		return ErrCorrupted
-	}
-
-	return d.init(header)
-}
-
-func (d *rangeDecoder) init(header []byte) error {
-	b := header[0]
-	header = header[1:]
-
-	for i := 0; i < len(header); i++ {
-		d.Code = (d.Code << 8) | uint32(header[i])
-	}
-
-	if b != 0 || d.Code == d.Range {
-		d.Corrupted = true
-	}
-
 	if b != 0 {
 		return ErrResultError
+	}
+
+	for i := 0; i < 4; i++ {
+		b, err = d.inStream.ReadByte()
+		if err != nil {
+			return err
+		}
+
+		d.Code = (d.Code << 8) | uint32(b)
 	}
 
 	return nil
 }
 
-func (d *rangeDecoder) Reopen(inStream io.Reader) error {
+func (d *rangeDecoder) Reopen(inStream io.ByteReader) error {
 	d.inStream = inStream
 	d.Corrupted = false
 	d.Range = 0xFFFFFFFF
 	d.Code = 0
 
-	header := make([]byte, rangeDecoderHeaderLen)
-
-	var (
-		noBufferedInput bool
-		readFrom        int
-	)
-
-	for i := 0; i < len(header); i++ {
-		if d.bi >= len(d.b) && !d.bSwapped {
-			d.bi = 0
-			d.b, d.btmp = d.btmp, d.b
-			d.bSwapped = true
-		}
-
-		if d.bi >= len(d.b) {
-			noBufferedInput = true
-			readFrom = i
-
-			break
-		}
-
-		header[i] = d.b[d.bi]
-		d.bi++
-	}
-
-	if noBufferedInput {
-		_, err := d.inStream.Read(header[readFrom:])
-		if err != nil {
-			return err
-		}
-
-		err = d.init(header)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return d.Init()
 }
 
-func (d *rangeDecoder) WarmUp() error {
-	var (
-		n   int
-		err error
-	)
-
-	if !d.bInitialized {
-		n, err = d.inStream.Read(d.b)
-		if err != nil && !errors.Is(err, io.EOF) {
-			return err
-		}
-
-		d.b = d.b[:n]
-		d.bInitialized = true
-	}
-
-	if !d.bSwapped {
-		return nil
-	}
-
-	d.btmp = d.btmp[:cap(d.btmp)]
-	n, err = d.inStream.Read(d.btmp)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return err
-	}
-
-	d.btmp = d.btmp[:n]
-	d.bSwapped = false
-
-	return nil
-}
-
-func (d *rangeDecoder) DecodeBit(prob *prob) uint32 {
+func (d *rangeDecoder) DecodeBit(prob *prob) (uint32, error) {
 	v := *prob
 	bound := (d.Range >> kNumBitModelTotalBits) * uint32(v)
 
@@ -168,21 +75,19 @@ func (d *rangeDecoder) DecodeBit(prob *prob) uint32 {
 
 	// Normalize
 	if d.Range < kTopValue {
-		if d.bi >= len(d.b) {
-			d.bi = 0
-			d.b, d.btmp = d.btmp, d.b
-			d.bSwapped = true
+		b, err := d.inStream.ReadByte()
+		if err != nil {
+			return 0, err
 		}
 
 		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
-		d.bi++
+		d.Code = (d.Code << 8) | uint32(b)
 	}
 
-	return symbol
+	return symbol, nil
 }
 
-func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
+func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 	var res uint32
 
 	for ; numBits > 0; numBits-- {
@@ -197,20 +102,18 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
 
 		// Normalize
 		if d.Range < kTopValue {
-			if d.bi >= len(d.b) {
-				d.bi = 0
-				d.b, d.btmp = d.btmp, d.b
-				d.bSwapped = true
+			b, err := d.inStream.ReadByte()
+			if err != nil {
+				return 0, err
 			}
 
 			d.Range <<= 8
-			d.Code = (d.Code << 8) | uint32(d.b[d.bi])
-			d.bi++
+			d.Code = (d.Code << 8) | uint32(b)
 		}
 
 		res <<= 1
 		res += t + 1
 	}
 
-	return res
+	return res, nil
 }
