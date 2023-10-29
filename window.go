@@ -3,22 +3,22 @@ package lzma
 import "io"
 
 type window struct {
-	buf    []byte
-	pos    uint32
-	size   uint32
-	isFull bool
-
+	buf      []byte
+	pos      uint32
+	size     uint32
+	isFull   bool
 	TotalPos uint32
-	pending  uint32
+
+	pending uint32
 }
 
 func newWindow(dictSize uint32) *window {
 	return &window{
 		buf:      make([]byte, dictSize),
 		pos:      0,
+		TotalPos: 0,
 		size:     dictSize,
 		isFull:   false,
-		TotalPos: 0,
 	}
 }
 
@@ -78,9 +78,9 @@ func (w *window) ReadPending(p []byte) (int, error) {
 }
 
 func (w *window) Reset() {
+	w.TotalPos = 0
 	w.pos = 0
 	w.isFull = false
-	w.TotalPos = 0
 	w.pending = 0
 }
 
@@ -89,7 +89,6 @@ func (w *window) ReadFrom(r io.Reader) (n int64, err error) {
 
 	nn, err = r.Read(w.buf[w.pos:])
 	w.pos += uint32(nn)
-	w.TotalPos += uint32(nn)
 	w.pending += uint32(nn)
 
 	if w.pos == w.size {

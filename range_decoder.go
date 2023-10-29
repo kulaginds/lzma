@@ -93,21 +93,24 @@ func (d *rangeDecoder) WarmUp() error {
 	return nil
 }
 
-func (d *rangeDecoder) DecodeBit(prob *uint16) uint32 {
-	bound := (d.Range >> kNumBitModelTotalBits) * uint32(*prob)
+func (d *rangeDecoder) DecodeBit(prob *prob) uint32 {
+	v := *prob
+	bound := (d.Range >> kNumBitModelTotalBits) * uint32(v)
 
 	var symbol uint32
 
 	if d.Code < bound {
-		*prob += ((1 << kNumBitModelTotalBits) - *prob) >> kNumMoveBits
+		v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 		d.Range = bound
 		symbol = 0
 	} else {
-		*prob -= *prob >> kNumMoveBits
+		v -= v >> kNumMoveBits
 		d.Code -= bound
 		d.Range -= bound
 		symbol = 1
 	}
+
+	*prob = v
 
 	// Normalize
 	if d.Range < kTopValue {

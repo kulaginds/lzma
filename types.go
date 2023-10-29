@@ -10,7 +10,7 @@ const (
 const (
 	kNumBitModelTotalBits = 11
 	kNumMoveBits          = 5
-	ProbInitVal           = (1 << kNumBitModelTotalBits) / 2
+	probInitVal           = (1 << kNumBitModelTotalBits) / 2
 
 	kNumPosBitsMax = 4
 
@@ -84,3 +84,5 @@ const (
 
 	maskLZMAUncompressedSize = 0b11111
 )
+
+type prob uint16

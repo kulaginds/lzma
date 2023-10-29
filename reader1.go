@@ -7,8 +7,8 @@ import (
 )
 
 type Reader1 struct {
-	outWindow *window
 	rangeDec  *rangeDecoder
+	outWindow *window
 
 	s *state
 }
@@ -175,7 +175,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 
 func (r *Reader1) decompress() (err error) {
 	for r.outWindow.Available() >= maxMatchLen {
-		if r.rangeDec.IsFinishedOK() {
+		if r.rangeDec.IsFinishedOK() && r.s.bytesLeft == 0 {
 			err = io.EOF
 
 			break
@@ -188,36 +188,60 @@ func (r *Reader1) decompress() (err error) {
 
 		err = r.decodeOperation()
 		if errors.Is(err, io.EOF) {
+			if !r.rangeDec.IsFinishedOK() {
+				return ErrResultError
+			}
+
 			break
 		}
 		if err != nil {
 			return err
 		}
+
+		//if r.s.bytesLeft > 0 && r.s.decompressed() >= r.s.bytesLeft {
+		//	if r.s.decompressed() > r.s.bytesLeft {
+		//		return ErrResultError
+		//	}
+		//
+		//	if !r.rangeDec.IsFinishedOK() {
+		//		return r.decodeOperation()
+		//	}
+		//}
 	}
 
 	return
+}
+
+var opCounter int64 = 0
+
+func printOp(op string) {
+	//if chunkCounter == 6 {
+	//	fmt.Print(op)
+	//}
 }
 
 func (r *Reader1) decodeOperation() error {
 	var err error
 
 	s := r.s
-	bit := uint32(0)
-	length := uint32(0)
-	dist := uint32(0)
-	isError := false
-	fullState := uint32(0)
 
-	if r.rangeDec.IsFinishedOK() {
-		return io.EOF
+	if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory {
+		if r.rangeDec.IsFinishedOK() {
+			return io.EOF
+		}
 	}
 
 	s.posState = r.outWindow.TotalPos & s.posMask
-	fullState = (s.state << kNumPosBitsMax) | s.posState
 
-	bit = r.rangeDec.DecodeBit(&s.isMatch[fullState])
-	if bit == 0 { // literal
-		fmt.Print("l")
+	opCounter++
+	if chunkCounter == 5 && opCounter == 55766 {
+		a := 4
+		_ = a
+		//fmt.Print(s.posState)
+	}
+
+	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
+		printOp("l")
 		if s.unpackSizeDefined && s.bytesLeft == 0 {
 			return ErrResultError
 		}
@@ -233,24 +257,15 @@ func (r *Reader1) decodeOperation() error {
 		return nil
 	}
 
-	if r.outWindow.IsEmpty() {
-		return ErrResultError
-	}
+	length := uint32(0)
 
-	bit = r.rangeDec.DecodeBit(&s.isRep[s.state])
-	if bit == 0 { // simple match
-		fmt.Print("m")
-		s.rep3 = s.rep2
-		s.rep2 = s.rep1
-		s.rep1 = s.rep0
+	if r.rangeDec.DecodeBit(&s.isRep[s.state]) == 0 { // simple match
+		printOp("m")
+		s.rep3, s.rep2, s.rep1 = s.rep2, s.rep1, s.rep0
 
 		length = s.lenDecoder.Decode(r.rangeDec, s.posState)
-
 		s.state = stateUpdateMatch(s.state)
-		s.rep0, err = r.DecodeDistance(length)
-		if err != nil {
-			return fmt.Errorf("decode distance: %w", err)
-		}
+		s.rep0 = r.DecodeDistance(length)
 
 		if s.rep0 == 0xFFFFFFFF {
 			if r.rangeDec.IsFinishedOK() {
@@ -260,7 +275,7 @@ func (r *Reader1) decodeOperation() error {
 			}
 		}
 
-		if s.unpackSizeDefined && s.bytesLeft == 0 && !s.markerIsMandatory {
+		if s.unpackSizeDefined && s.bytesLeft == 0 {
 			return ErrResultError
 		}
 
@@ -272,12 +287,13 @@ func (r *Reader1) decodeOperation() error {
 			return ErrResultError
 		}
 
-		bit = r.rangeDec.DecodeBit(&s.isRepG0[s.state])
-		if bit == 0 { // short rep match
-			fmt.Print("s")
-			bit = r.rangeDec.DecodeBit(&s.isRep0Long[fullState])
+		if r.outWindow.IsEmpty() {
+			return ErrResultError
+		}
 
-			if bit == 0 {
+		if r.rangeDec.DecodeBit(&s.isRepG0[s.state]) == 0 { // short rep match
+			printOp("s")
+			if r.rangeDec.DecodeBit(&s.isRep0Long[(s.state<<kNumPosBitsMax)+s.posState]) == 0 {
 				s.state = stateUpdateShortRep(s.state)
 				r.outWindow.PutByte(r.outWindow.GetByte(s.rep0 + 1))
 				s.bytesLeft--
@@ -285,13 +301,12 @@ func (r *Reader1) decodeOperation() error {
 				return nil
 			}
 		} else { // rep match
-			fmt.Print("r")
-			bit = r.rangeDec.DecodeBit(&s.isRepG1[s.state])
-			if bit == 0 {
+			printOp("r")
+			dist := uint32(0)
+			if r.rangeDec.DecodeBit(&s.isRepG1[s.state]) == 0 {
 				dist = s.rep1
 			} else {
-				bit = r.rangeDec.DecodeBit(&s.isRepG2[s.state])
-				if bit == 0 {
+				if r.rangeDec.DecodeBit(&s.isRepG2[s.state]) == 0 {
 					dist = s.rep2
 				} else {
 					dist = s.rep3
@@ -306,11 +321,11 @@ func (r *Reader1) decodeOperation() error {
 		}
 
 		length = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
-
 		s.state = stateUpdateRep(s.state)
 	}
 
 	length += kMatchMinLen
+	isError := false
 	if s.unpackSizeDefined && uint32(s.bytesLeft) < length {
 		length = uint32(s.bytesLeft)
 		isError = true
@@ -335,21 +350,18 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 
 	s := r.s
 	symbol := uint32(1)
-	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
-	probs := s.litProbs[(uint32(0x300) * litState):]
+	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) | (prevByte >> (8 - s.lc))
+	probs := s.litProbs[uint32(0x300)*litState:]
 
 	if state >= 7 {
-		matchByte := r.outWindow.GetByte(rep0 + 1)
-
-		var bit uint32
+		matchByte := uint32(r.outWindow.GetByte(rep0 + 1))
 
 		for symbol < 0x100 {
-			matchBit := uint32((matchByte >> 7) & 1)
+			matchBit := (matchByte >> 7) & 1
 			matchByte <<= 1
-
-			bit = r.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
-
+			bit := r.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
 			symbol = (symbol << 1) | bit
+
 			if matchBit != bit {
 				break
 			}
@@ -360,12 +372,14 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 		symbol = (symbol << 1) | r.rangeDec.DecodeBit(&probs[symbol])
 	}
 
-	r.outWindow.PutByte(byte(symbol - 0x100))
+	symbol -= 0x100
+
+	r.outWindow.PutByte(byte(symbol))
 
 	return nil
 }
 
-func (r *Reader1) DecodeDistance(len uint32) (uint32, error) {
+func (r *Reader1) DecodeDistance(len uint32) uint32 {
 	lenState := len
 	if lenState > (kNumLenToPosStates - 1) {
 		lenState = kNumLenToPosStates - 1
@@ -375,7 +389,7 @@ func (r *Reader1) DecodeDistance(len uint32) (uint32, error) {
 	posSlot := s.posSlotDecoder[lenState].Decode(r.rangeDec)
 
 	if posSlot < 4 {
-		return posSlot, nil
+		return posSlot
 	}
 
 	numDirectBits := (posSlot >> 1) - 1
@@ -388,5 +402,5 @@ func (r *Reader1) DecodeDistance(len uint32) (uint32, error) {
 		dist += s.alignDecoder.ReverseDecode(r.rangeDec)
 	}
 
-	return dist, nil
+	return dist
 }

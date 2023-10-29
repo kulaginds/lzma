@@ -1,8 +1,8 @@
 package lzma
 
 type lenDecoder struct {
-	choice  uint16
-	choice2 uint16
+	choice  prob
+	choice2 prob
 
 	lowCoder  []*bitTreeDecoder
 	midCoder  []*bitTreeDecoder
@@ -11,8 +11,8 @@ type lenDecoder struct {
 
 func newLenDecoder() *lenDecoder {
 	d := &lenDecoder{
-		choice:  ProbInitVal,
-		choice2: ProbInitVal,
+		choice:  probInitVal,
+		choice2: probInitVal,
 
 		lowCoder:  make([]*bitTreeDecoder, 1<<kNumPosBitsMax),
 		midCoder:  make([]*bitTreeDecoder, 1<<kNumPosBitsMax),
@@ -30,28 +30,24 @@ func newLenDecoder() *lenDecoder {
 }
 
 func (d *lenDecoder) Reset() {
+	d.choice = probInitVal
+	d.choice2 = probInitVal
+	d.highCoder.Reset()
+
 	for i := 0; i < len(d.lowCoder); i++ {
 		d.lowCoder[i].Reset()
 		d.midCoder[i].Reset()
 	}
-
-	d.highCoder.Reset()
 }
 
 func (d *lenDecoder) Decode(rc *rangeDecoder, posState uint32) uint32 {
-	bit := rc.DecodeBit(&d.choice)
-	if bit == 0 {
+	if rc.DecodeBit(&d.choice) == 0 {
 		return d.lowCoder[posState].Decode(rc)
 	}
 
-	bit = rc.DecodeBit(&d.choice2)
-	if bit == 0 {
-		bit = d.midCoder[posState].Decode(rc)
-
-		return 8 + bit
+	if rc.DecodeBit(&d.choice2) == 0 {
+		return 8 + d.midCoder[posState].Decode(rc)
 	}
 
-	bit = d.highCoder.Decode(rc)
-
-	return 16 + bit
+	return 16 + d.highCoder.Decode(rc)
 }

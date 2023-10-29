@@ -1,14 +1,14 @@
 package lzma
 
 type bitTreeDecoder struct {
-	probs   []uint16
+	probs   []prob
 	numBits int
 }
 
 func newBitTreeDecoder(numBits int) *bitTreeDecoder {
 	d := &bitTreeDecoder{
 		numBits: numBits,
-		probs:   make([]uint16, uint(1)<<numBits),
+		probs:   make([]prob, uint32(1)<<numBits),
 	}
 	d.Reset()
 
@@ -33,7 +33,7 @@ func (d *bitTreeDecoder) ReverseDecode(rc *rangeDecoder) uint32 {
 	return BitTreeReverseDecode(d.probs, d.numBits, rc)
 }
 
-func BitTreeReverseDecode(probs []uint16, numBits int, rc *rangeDecoder) uint32 {
+func BitTreeReverseDecode(probs []prob, numBits int, rc *rangeDecoder) uint32 {
 	var bit uint32
 
 	m := uint32(1)
@@ -42,8 +42,7 @@ func BitTreeReverseDecode(probs []uint16, numBits int, rc *rangeDecoder) uint32 
 	for i := 0; i < numBits; i++ {
 		bit = rc.DecodeBit(&probs[m])
 
-		m <<= 1
-		m += bit
+		m = (m << 1) | bit
 		symbol |= bit << i
 	}
 
