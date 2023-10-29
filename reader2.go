@@ -34,6 +34,18 @@ func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
 	return r, r.initialize()
 }
 
+func NewReader2ForSevenZip(inStream io.Reader, props []byte) (*Reader2, error) {
+	r := &Reader2{
+		inStream: inStream,
+
+		dictSize: DecodeDictSize2(props[0]),
+
+		header: make([]byte, 6),
+	}
+
+	return r, r.initialize()
+}
+
 func (r *Reader2) initialize() error {
 	err := r.validateDictSize()
 	if err != nil {
@@ -106,7 +118,7 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize++
 
 	if r.lzmaReader == nil {
-		r.lzmaReader, err = NewReader1WithOptionsAndWindow(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
+		r.lzmaReader, err = NewReader1ForReader2(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
 		if err != nil {
 			return err
 		}
@@ -118,7 +130,10 @@ func (r *Reader2) startChunk() error {
 	case chunkLZMAResetState:
 		r.lzmaReader.s.Reset()
 	case chunkLZMAResetStateNewProp, chunkLZMAResetStateNewPropResetDict:
-		lc, pb, lp := DecodeProp(r.header[5])
+		lc, pb, lp, err := DecodeProp(r.header[5])
+		if err != nil {
+			return err
+		}
 
 		r.lzmaReader.s = newState(lc, pb, lp)
 	}

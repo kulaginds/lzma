@@ -22,24 +22,35 @@ func NewReader1(inStream io.Reader) (*Reader1, error) {
 	return r, r.initializeFull(inStream)
 }
 
-func NewReader1WithOptions(inStream io.Reader, prop byte, dictSize uint32, unpackSize uint64) (*Reader1, error) {
+func NewReader1ForSevenZip(inStream io.Reader, props []byte, unpackSize uint64) (*Reader1, error) {
+	lc, pb, lp, err := DecodeProp(props[0])
+	if err != nil {
+		return nil, err
+	}
+
+	dictSize, err := DecodeDictSize(props[1:5])
+	if err != nil {
+		return nil, err
+	}
+
 	r := &Reader1{
 		rangeDec:  newRangeDecoder(inStream),
 		outWindow: newWindow(dictSize),
 	}
 
-	lc, pb, lp := DecodeProp(prop)
-
 	return r, r.initialize(lc, pb, lp, unpackSize)
 }
 
-func NewReader1WithOptionsAndWindow(inStream io.Reader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
+func NewReader1ForReader2(inStream io.Reader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
+	lc, pb, lp, err := DecodeProp(prop)
+	if err != nil {
+		return nil, err
+	}
+
 	r := &Reader1{
 		outWindow: outWindow,
 		rangeDec:  newRangeDecoder(inStream),
 	}
-
-	lc, pb, lp := DecodeProp(prop)
 
 	return r, r.initialize(lc, pb, lp, unpackSize)
 }
@@ -56,11 +67,10 @@ func (r *Reader1) initializeFull(inStream io.Reader) error {
 		return ErrCorrupted
 	}
 
-	if header[0] >= (9 * 5 * 5) {
-		return ErrIncorrectProperties
+	lc, pb, lp, err := DecodeProp(header[0])
+	if err != nil {
+		return fmt.Errorf("decode prop: %w", err)
 	}
-
-	lc, pb, lp := DecodeProp(header[0])
 
 	dictSize, err := DecodeDictSize(header[1:5])
 	if err != nil {
@@ -144,13 +154,17 @@ func DecodeDictSize(properties []byte) (uint32, error) {
 	return dictSize, nil
 }
 
-func DecodeProp(d byte) (uint8, uint8, uint8) {
+func DecodeProp(d byte) (uint8, uint8, uint8, error) {
+	if d >= (9 * 5 * 5) {
+		return 0, 0, 0, ErrIncorrectProperties
+	}
+
 	lc := d % 9
 	d /= 9
 	pb := d / 5
 	lp := d % 5
 
-	return lc, pb, lp
+	return lc, pb, lp, nil
 }
 
 func (r *Reader1) Read(p []byte) (n int, err error) {
