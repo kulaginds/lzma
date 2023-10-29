@@ -199,9 +199,9 @@ func (r *Reader1) decompress() (err error) {
 }
 
 func printOp(op string) {
-	if chunkCounter == 1 {
-		fmt.Print(op)
-	}
+	//if chunkCounter == 1 {
+	//	fmt.Print(op)
+	//}
 }
 
 var opCounter = int64(0)
@@ -219,6 +219,11 @@ func (r *Reader1) decodeOperation() error {
 
 	s.posState = r.outWindow.TotalPos & s.posMask
 	opCounter++
+
+	if chunkCounter == 1 && opCounter == 15237 {
+		a := 5
+		_ = a
+	}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
 		printOp("l")
