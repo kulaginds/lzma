@@ -28,8 +28,8 @@ func (w *window) PutByte(b byte) {
 	w.pos++
 	w.pending++
 
-	if w.pos == w.size {
-		w.pos = 0
+	if w.pos >= w.size {
+		w.pos -= w.size
 		w.isFull = true
 	}
 }
@@ -91,8 +91,8 @@ func (w *window) ReadFrom(r io.Reader) (n int64, err error) {
 	w.pos += uint32(nn)
 	w.pending += uint32(nn)
 
-	if w.pos == w.size {
-		w.pos = 0
+	if w.pos >= w.size {
+		w.pos -= w.size
 		w.isFull = true
 	}
 
