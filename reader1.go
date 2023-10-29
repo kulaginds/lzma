@@ -10,7 +10,8 @@ type Reader1 struct {
 	rangeDec  *rangeDecoder
 	outWindow *window
 
-	s *state
+	s             *state
+	isEndOfStream bool
 }
 
 func NewReader1(inStream io.Reader) (*Reader1, error) {
@@ -80,6 +81,7 @@ func (r *Reader1) initialize(lc, pb, lp uint8, unpackSize uint64) error {
 
 func (r *Reader1) Reset() {
 	r.s.Reset()
+	r.isEndOfStream = false
 }
 
 func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
@@ -140,10 +142,7 @@ func decodeProp(d byte) (uint8, uint8, uint8) {
 }
 
 func (r *Reader1) Read(p []byte) (n int, err error) {
-	var (
-		k      int
-		decErr error
-	)
+	var k int
 
 	for {
 		if r.outWindow.HasPending() {
@@ -158,16 +157,18 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			}
 		}
 
-		if errors.Is(decErr, io.EOF) {
-			err = decErr
+		if r.isEndOfStream {
+			err = io.EOF
 
 			return
 		}
 
-		decErr = r.decompress()
-		if decErr != nil && !errors.Is(decErr, io.EOF) {
-			err = decErr
-
+		err = r.decompress()
+		if errors.Is(err, io.EOF) {
+			r.isEndOfStream = true
+			err = nil
+		}
+		if err != nil {
 			return
 		}
 	}
@@ -175,12 +176,6 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 
 func (r *Reader1) decompress() (err error) {
 	for r.outWindow.Available() >= maxMatchLen {
-		if r.rangeDec.IsFinishedOK() && r.s.bytesLeft == 0 {
-			err = io.EOF
-
-			break
-		}
-
 		err = r.rangeDec.WarmUp()
 		if err != nil {
 			return err
@@ -189,7 +184,7 @@ func (r *Reader1) decompress() (err error) {
 		err = r.decodeOperation()
 		if errors.Is(err, io.EOF) {
 			if !r.rangeDec.IsFinishedOK() {
-				return ErrResultError
+				err = ErrResultError
 			}
 
 			break
@@ -197,16 +192,6 @@ func (r *Reader1) decompress() (err error) {
 		if err != nil {
 			return err
 		}
-
-		//if r.s.bytesLeft > 0 && r.s.decompressed() >= r.s.bytesLeft {
-		//	if r.s.decompressed() > r.s.bytesLeft {
-		//		return ErrResultError
-		//	}
-		//
-		//	if !r.rangeDec.IsFinishedOK() {
-		//		return r.decodeOperation()
-		//	}
-		//}
 	}
 
 	return
@@ -225,7 +210,7 @@ func (r *Reader1) decodeOperation() error {
 
 	s := r.s
 
-	if s.unpackSizeDefined && s.unpackSize == 0 && !s.markerIsMandatory {
+	if s.unpackSizeDefined && s.bytesLeft == 0 && !s.markerIsMandatory {
 		if r.rangeDec.IsFinishedOK() {
 			return io.EOF
 		}
@@ -234,7 +219,7 @@ func (r *Reader1) decodeOperation() error {
 	s.posState = r.outWindow.TotalPos & s.posMask
 
 	opCounter++
-	if chunkCounter == 5 && opCounter == 55766 {
+	if chunkCounter == 0 && opCounter == 79 {
 		a := 4
 		_ = a
 		//fmt.Print(s.posState)
@@ -269,6 +254,10 @@ func (r *Reader1) decodeOperation() error {
 
 		if s.rep0 == 0xFFFFFFFF {
 			if r.rangeDec.IsFinishedOK() {
+				if s.unpackSizeDefined && s.bytesLeft > 0 && !s.markerIsMandatory {
+					return ErrResultError
+				}
+
 				return io.EOF
 			} else {
 				return ErrResultError
@@ -343,25 +332,28 @@ func (r *Reader1) decodeOperation() error {
 }
 
 func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
+	s := r.s
 	prevByte := uint32(0)
 	if !r.outWindow.IsEmpty() {
 		prevByte = uint32(r.outWindow.GetByte(1))
 	}
 
-	s := r.s
 	symbol := uint32(1)
-	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) | (prevByte >> (8 - s.lc))
-	probs := s.litProbs[uint32(0x300)*litState:]
+	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
+	probs := s.litProbs[(uint32(0x300) * litState):]
 
 	if state >= 7 {
-		matchByte := uint32(r.outWindow.GetByte(rep0 + 1))
+		matchByte := r.outWindow.GetByte(rep0 + 1)
+
+		var bit uint32
 
 		for symbol < 0x100 {
-			matchBit := (matchByte >> 7) & 1
+			matchBit := uint32((matchByte >> 7) & 1)
 			matchByte <<= 1
-			bit := r.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
-			symbol = (symbol << 1) | bit
 
+			bit = r.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
+
+			symbol = (symbol << 1) | bit
 			if matchBit != bit {
 				break
 			}
@@ -372,9 +364,7 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 		symbol = (symbol << 1) | r.rangeDec.DecodeBit(&probs[symbol])
 	}
 
-	symbol -= 0x100
-
-	r.outWindow.PutByte(byte(symbol))
+	r.outWindow.PutByte(byte(symbol - 0x100))
 
 	return nil
 }
