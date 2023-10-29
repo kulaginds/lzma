@@ -1,6 +1,7 @@
 package lzma
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -16,9 +17,6 @@ type rangeDecoder struct {
 	bi           int
 	bSwapped     bool
 	bInitialized bool
-
-	readByte []byte
-	readErr  error
 }
 
 func newRangeDecoder(inStream io.Reader) *rangeDecoder {
@@ -30,8 +28,6 @@ func newRangeDecoder(inStream io.Reader) *rangeDecoder {
 		b:        make([]byte, lzmaRequiredInputMax+1),
 		btmp:     make([]byte, lzmaRequiredInputMax+1),
 		bSwapped: true,
-
-		readByte: make([]byte, 1),
 	}
 }
 
@@ -79,78 +75,76 @@ func (d *rangeDecoder) Reopen(inStream io.Reader) error {
 	d.Range = 0xFFFFFFFF
 	d.Code = 0
 
-	return d.Init()
+	header := make([]byte, rangeDecoderHeaderLen)
 
-	//header := make([]byte, rangeDecoderHeaderLen)
-	//
-	//var (
-	//	noBufferedInput bool
-	//	readFrom        int
-	//)
-	//
-	//for i := 0; i < len(header); i++ {
-	//	if d.bi >= len(d.b) && !d.bSwapped {
-	//		d.bi = 0
-	//		d.b, d.btmp = d.btmp, d.b
-	//		d.bSwapped = true
-	//	}
-	//
-	//	if d.bi >= len(d.b) {
-	//		noBufferedInput = true
-	//		readFrom = i
-	//
-	//		break
-	//	}
-	//
-	//	header[i] = d.b[d.bi]
-	//	d.bi++
-	//}
-	//
-	//if noBufferedInput {
-	//	_, err := d.inStream.Read(header[readFrom:])
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	err = d.init(header)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
+	var (
+		noBufferedInput bool
+		readFrom        int
+	)
 
-	//return nil
+	for i := 0; i < len(header); i++ {
+		if d.bi >= len(d.b) && !d.bSwapped {
+			d.bi = 0
+			d.b, d.btmp = d.btmp, d.b
+			d.bSwapped = true
+		}
+
+		if d.bi >= len(d.b) {
+			noBufferedInput = true
+			readFrom = i
+
+			break
+		}
+
+		header[i] = d.b[d.bi]
+		d.bi++
+	}
+
+	if noBufferedInput {
+		_, err := d.inStream.Read(header[readFrom:])
+		if err != nil {
+			return err
+		}
+
+		err = d.init(header)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *rangeDecoder) WarmUp() error {
-	//var (
-	//	n   int
-	//	err error
-	//)
-	//
-	//if !d.bInitialized {
-	//	n, err = d.inStream.Read(d.b)
-	//	if err != nil && !errors.Is(err, io.EOF) {
-	//		return err
-	//	}
-	//
-	//	d.b = d.b[:n]
-	//	d.bInitialized = true
-	//}
-	//
-	//if !d.bSwapped {
-	//	return nil
-	//}
-	//
-	//d.btmp = d.btmp[:cap(d.btmp)]
-	//n, err = d.inStream.Read(d.btmp)
-	//if err != nil && !errors.Is(err, io.EOF) {
-	//	return err
-	//}
-	//
-	//d.btmp = d.btmp[:n]
-	//d.bSwapped = false
+	var (
+		n   int
+		err error
+	)
 
-	return d.readErr
+	if !d.bInitialized {
+		n, err = d.inStream.Read(d.b)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+
+		d.b = d.b[:n]
+		d.bInitialized = true
+	}
+
+	if !d.bSwapped {
+		return nil
+	}
+
+	d.btmp = d.btmp[:cap(d.btmp)]
+	n, err = d.inStream.Read(d.btmp)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+
+	d.btmp = d.btmp[:n]
+	d.bSwapped = false
+
+	return nil
 }
 
 func (d *rangeDecoder) DecodeBit(prob *prob) uint32 {
@@ -174,15 +168,14 @@ func (d *rangeDecoder) DecodeBit(prob *prob) uint32 {
 
 	// Normalize
 	if d.Range < kTopValue {
-		//if d.bi >= len(d.b) {
-		//	d.bi = 0
-		//	d.b, d.btmp = d.btmp, d.b
-		//	d.bSwapped = true
-		//}
-		_, d.readErr = d.inStream.Read(d.readByte)
+		if d.bi >= len(d.b) {
+			d.bi = 0
+			d.b, d.btmp = d.btmp, d.b
+			d.bSwapped = true
+		}
 
 		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(d.readByte[0])
+		d.Code = (d.Code << 8) | uint32(d.b[d.bi])
 		d.bi++
 	}
 
@@ -204,15 +197,14 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) uint32 {
 
 		// Normalize
 		if d.Range < kTopValue {
-			//if d.bi >= len(d.b) {
-			//	d.bi = 0
-			//	d.b, d.btmp = d.btmp, d.b
-			//	d.bSwapped = true
-			//}
-			_, d.readErr = d.inStream.Read(d.readByte)
+			if d.bi >= len(d.b) {
+				d.bi = 0
+				d.b, d.btmp = d.btmp, d.b
+				d.bSwapped = true
+			}
 
 			d.Range <<= 8
-			d.Code = (d.Code << 8) | uint32(d.readByte[0])
+			d.Code = (d.Code << 8) | uint32(d.b[d.bi])
 			d.bi++
 		}
 
