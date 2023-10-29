@@ -61,6 +61,13 @@ func (d *rangeDecoder) Init() (bool, error) {
 	return b == 0, nil
 }
 
+func (d *rangeDecoder) Reopen(inStream io.Reader) {
+	d.inStream = inStream
+	d.Corrupted = false
+	d.Range = 0xFFFFFFFF
+	d.Code = 0
+}
+
 func (d *rangeDecoder) WarmUp() error {
 	var (
 		n   int

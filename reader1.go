@@ -107,7 +107,7 @@ func (r *Reader1) Reset() {
 
 func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
 	r.isEndOfStream = false
-	r.rangeDec = newRangeDecoder(inStream)
+	r.rangeDec.Reopen(inStream)
 	r.s.SetUnpackSize(unpackSize)
 
 	initialized, err := r.rangeDec.Init()
