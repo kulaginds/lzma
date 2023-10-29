@@ -87,7 +87,7 @@ func (r *Reader2) startChunk() error {
 
 	r.chunkType = decodeChunkType(r.header[0])
 	r.chunkCounter++
-	r.printChunk(r.chunkType)
+	//r.printChunk(r.chunkType)
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
@@ -121,6 +121,9 @@ func (r *Reader2) startChunk() error {
 		if err != nil {
 			return err
 		}
+
+		r.lzmaReader.chunkCounter = r.chunkCounter
+		r.lzmaReader.opCounter = 0
 
 		return nil
 	}

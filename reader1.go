@@ -218,9 +218,9 @@ func (r *Reader1) decompress() (err error) {
 }
 
 func (r *Reader1) printOp(op string) {
-	//if chunkCounter == 1 {
-	fmt.Print(op)
-	//}
+	if r.chunkCounter == 1 {
+		fmt.Println(r.opCounter, op, r.rangeDec.Code, r.rangeDec.Range)
+	}
 }
 
 func (r *Reader1) decodeOperation() error {
@@ -243,11 +243,11 @@ func (r *Reader1) decodeOperation() error {
 	//}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
-		r.printOp("l")
 		if s.unpackSizeDefined && s.bytesLeft == 0 {
 			return ErrResultError
 		}
 
+		r.printOp("l")
 		err = r.DecodeLiteral(s.state, s.rep0)
 		if err != nil {
 			return fmt.Errorf("decode literal: %w", err)
@@ -262,9 +262,9 @@ func (r *Reader1) decodeOperation() error {
 	length := uint32(0)
 
 	if r.rangeDec.DecodeBit(&s.isRep[s.state]) == 0 { // simple match
-		r.printOp("m")
 		s.rep3, s.rep2, s.rep1 = s.rep2, s.rep1, s.rep0
 
+		r.printOp("m")
 		length = s.lenDecoder.Decode(r.rangeDec, s.posState)
 		s.state = stateUpdateMatch(s.state)
 		s.rep0 = r.DecodeDistance(length)
@@ -307,7 +307,6 @@ func (r *Reader1) decodeOperation() error {
 				return nil
 			}
 		} else { // rep match
-			r.printOp("r")
 			dist := uint32(0)
 			if r.rangeDec.DecodeBit(&s.isRepG1[s.state]) == 0 {
 				dist = s.rep1
@@ -326,6 +325,7 @@ func (r *Reader1) decodeOperation() error {
 			s.rep0 = dist
 		}
 
+		r.printOp("r")
 		length = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
 		s.state = stateUpdateRep(s.state)
 	}
