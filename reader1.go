@@ -199,9 +199,9 @@ func (r *Reader1) decompress() (err error) {
 }
 
 func printOp(op string) {
-	//if chunkCounter == 69 {
-	//	fmt.Print(op)
-	//}
+	if chunkCounter == 1 {
+		fmt.Print(op)
+	}
 }
 
 var opCounter = int64(0)
