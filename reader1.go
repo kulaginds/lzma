@@ -237,10 +237,10 @@ func (r *Reader1) decodeOperation() error {
 	s.posState = r.outWindow.TotalPos & s.posMask
 	r.opCounter++
 
-	//if chunkCounter == 1 && opCounter == 15237 {
-	//	a := 5
-	//	_ = a
-	//}
+	if r.chunkCounter == 1 && r.opCounter == 15220 {
+		a := 5
+		_ = a
+	}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
 		if s.unpackSizeDefined && s.bytesLeft == 0 {
