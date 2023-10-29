@@ -12,6 +12,9 @@ type Reader1 struct {
 
 	s             *state
 	isEndOfStream bool
+
+	chunkCounter int64
+	opCounter    int64
 }
 
 func NewReader1(inStream io.Reader) (*Reader1, error) {
@@ -214,13 +217,11 @@ func (r *Reader1) decompress() (err error) {
 	return
 }
 
-func printOp(op string) {
+func (r *Reader1) printOp(op string) {
 	//if chunkCounter == 1 {
-	//	fmt.Print(op)
+	fmt.Print(op)
 	//}
 }
-
-//var opCounter = int64(0)
 
 func (r *Reader1) decodeOperation() error {
 	var err error
@@ -234,7 +235,7 @@ func (r *Reader1) decodeOperation() error {
 	}
 
 	s.posState = r.outWindow.TotalPos & s.posMask
-	//opCounter++
+	r.opCounter++
 
 	//if chunkCounter == 1 && opCounter == 15237 {
 	//	a := 5
@@ -242,7 +243,7 @@ func (r *Reader1) decodeOperation() error {
 	//}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
-		printOp("l")
+		r.printOp("l")
 		if s.unpackSizeDefined && s.bytesLeft == 0 {
 			return ErrResultError
 		}
@@ -261,7 +262,7 @@ func (r *Reader1) decodeOperation() error {
 	length := uint32(0)
 
 	if r.rangeDec.DecodeBit(&s.isRep[s.state]) == 0 { // simple match
-		printOp("m")
+		r.printOp("m")
 		s.rep3, s.rep2, s.rep1 = s.rep2, s.rep1, s.rep0
 
 		length = s.lenDecoder.Decode(r.rangeDec, s.posState)
@@ -297,7 +298,7 @@ func (r *Reader1) decodeOperation() error {
 		}
 
 		if r.rangeDec.DecodeBit(&s.isRepG0[s.state]) == 0 { // short rep match
-			printOp("s")
+			r.printOp("s")
 			if r.rangeDec.DecodeBit(&s.isRep0Long[(s.state<<kNumPosBitsMax)+s.posState]) == 0 {
 				s.state = stateUpdateShortRep(s.state)
 				r.outWindow.PutByte(r.outWindow.GetByte(s.rep0 + 1))
@@ -306,7 +307,7 @@ func (r *Reader1) decodeOperation() error {
 				return nil
 			}
 		} else { // rep match
-			printOp("r")
+			r.printOp("r")
 			dist := uint32(0)
 			if r.rangeDec.DecodeBit(&s.isRepG1[s.state]) == 0 {
 				dist = s.rep1

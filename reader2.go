@@ -20,6 +20,8 @@ type Reader2 struct {
 	chunkCompressedSize   uint16
 
 	limitReader io.Reader
+
+	chunkCounter int64
 }
 
 func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
@@ -69,8 +71,6 @@ func (r *Reader2) validateDictSize() error {
 	return nil
 }
 
-var chunkCounter = int64(0)
-
 func (r *Reader2) startChunk() error {
 	_, err := r.inStream.Read(r.header[0:1])
 	if err != nil {
@@ -86,9 +86,8 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = 0
 
 	r.chunkType = decodeChunkType(r.header[0])
-	chunkCounter++
-	//opCounter = 0
-	printChunk(r.chunkType)
+	r.chunkCounter++
+	r.printChunk(r.chunkType)
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
@@ -126,6 +125,9 @@ func (r *Reader2) startChunk() error {
 		return nil
 	}
 
+	r.lzmaReader.chunkCounter = r.chunkCounter
+	r.lzmaReader.opCounter = 0
+
 	switch r.chunkType {
 	case chunkLZMAResetState:
 		r.lzmaReader.s.Reset()
@@ -146,7 +148,7 @@ func (r *Reader2) startChunk() error {
 	return nil
 }
 
-func printChunk(chunkType chunkType) {
+func (r *Reader2) printChunk(chunkType chunkType) {
 	name := ""
 
 	switch chunkType {
@@ -166,7 +168,7 @@ func printChunk(chunkType chunkType) {
 		name = "cLRND"
 	}
 
-	fmt.Println(name, chunkCounter)
+	fmt.Println(name, r.chunkCounter)
 	//_ = name
 }
 
