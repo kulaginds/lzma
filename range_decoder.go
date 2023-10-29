@@ -35,18 +35,22 @@ func (d *rangeDecoder) IsFinishedOK() bool {
 	return d.Code == 0
 }
 
-func (d *rangeDecoder) Init() (bool, error) {
+func (d *rangeDecoder) Init() error {
 	header := make([]byte, rangeDecoderHeaderLen)
 
 	n, err := d.inStream.Read(header)
 	if err != nil {
-		return false, fmt.Errorf("inStream.Read: %w", err)
+		return fmt.Errorf("inStream.Read: %w", err)
 	}
 
 	if n != rangeDecoderHeaderLen {
-		return false, ErrCorrupted
+		return ErrCorrupted
 	}
 
+	return d.init(header)
+}
+
+func (d *rangeDecoder) init(header []byte) error {
 	b := header[0]
 	header = header[1:]
 
@@ -58,14 +62,57 @@ func (d *rangeDecoder) Init() (bool, error) {
 		d.Corrupted = true
 	}
 
-	return b == 0, nil
+	if b != 0 {
+		return ErrResultError
+	}
+
+	return nil
 }
 
-func (d *rangeDecoder) Reopen(inStream io.Reader) {
+func (d *rangeDecoder) Reopen(inStream io.Reader) error {
 	d.inStream = inStream
 	d.Corrupted = false
 	d.Range = 0xFFFFFFFF
 	d.Code = 0
+
+	header := make([]byte, rangeDecoderHeaderLen)
+
+	var (
+		noBufferedInput bool
+		readFrom        int
+	)
+
+	for i := 0; i < len(header); i++ {
+		if d.bi >= len(d.b) && !d.bSwapped {
+			d.bi = 0
+			d.b, d.btmp = d.btmp, d.b
+			d.bSwapped = true
+		}
+
+		if d.bi >= len(d.b) {
+			noBufferedInput = true
+			readFrom = i
+
+			break
+		}
+
+		header[i] = d.b[d.bi]
+		d.bi++
+	}
+
+	if noBufferedInput {
+		_, err := d.inStream.Read(header[readFrom:])
+		if err != nil {
+			return err
+		}
+
+		err = d.init(header)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *rangeDecoder) WarmUp() error {

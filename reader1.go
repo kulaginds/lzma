@@ -88,13 +88,9 @@ func (r *Reader1) initialize(lc, pb, lp uint8, unpackSize uint64) error {
 	r.s = newState(lc, pb, lp)
 	r.s.SetUnpackSize(unpackSize)
 
-	initialized, err := r.rangeDec.Init()
+	err := r.rangeDec.Init()
 	if err != nil {
 		return fmt.Errorf("rangeDec.Reset: %w", err)
-	}
-
-	if !initialized {
-		return ErrResultError
 	}
 
 	return nil
@@ -107,16 +103,11 @@ func (r *Reader1) Reset() {
 
 func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
 	r.isEndOfStream = false
-	r.rangeDec.Reopen(inStream)
 	r.s.SetUnpackSize(unpackSize)
 
-	initialized, err := r.rangeDec.Init()
+	err := r.rangeDec.Reopen(inStream)
 	if err != nil {
 		return err
-	}
-
-	if !initialized {
-		return ErrResultError
 	}
 
 	return nil
