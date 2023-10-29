@@ -74,9 +74,9 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = 0
 
 	r.chunkType = decodeChunkType(r.header[0])
-	//chunkCounter++
+	chunkCounter++
+	opCounter = 0
 	//printChunk(r.chunkType)
-	//opCounter = 0
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
