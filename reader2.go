@@ -166,8 +166,8 @@ func printChunk(chunkType chunkType) {
 		name = "cLRND"
 	}
 
-	//fmt.Println(name, chunkCounter)
-	_ = name
+	fmt.Println(name, chunkCounter)
+	//_ = name
 }
 
 func decodeChunkType(chunkCode byte) chunkType {
