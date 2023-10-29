@@ -237,7 +237,7 @@ func (r *Reader1) decodeOperation() error {
 	s.posState = r.outWindow.TotalPos & s.posMask
 	r.opCounter++
 
-	if r.chunkCounter == 1 && r.opCounter == 15220 {
+	if r.chunkCounter == 1 && r.opCounter == 15198 {
 		a := 5
 		_ = a
 	}
