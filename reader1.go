@@ -22,13 +22,24 @@ func NewReader1(inStream io.Reader) (*Reader1, error) {
 	return r, r.initializeFull(inStream)
 }
 
-func NewReader1WithOptions(inStream io.Reader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
+func NewReader1WithOptions(inStream io.Reader, prop byte, dictSize uint32, unpackSize uint64) (*Reader1, error) {
+	r := &Reader1{
+		rangeDec:  newRangeDecoder(inStream),
+		outWindow: newWindow(dictSize),
+	}
+
+	lc, pb, lp := DecodeProp(prop)
+
+	return r, r.initialize(lc, pb, lp, unpackSize)
+}
+
+func NewReader1WithOptionsAndWindow(inStream io.Reader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
 	r := &Reader1{
 		outWindow: outWindow,
 		rangeDec:  newRangeDecoder(inStream),
 	}
 
-	lc, pb, lp := decodeProp(prop)
+	lc, pb, lp := DecodeProp(prop)
 
 	return r, r.initialize(lc, pb, lp, unpackSize)
 }
@@ -49,16 +60,16 @@ func (r *Reader1) initializeFull(inStream io.Reader) error {
 		return ErrIncorrectProperties
 	}
 
-	lc, pb, lp := decodeProp(header[0])
+	lc, pb, lp := DecodeProp(header[0])
 
-	dictSize, err := r.decodeDictSize(header[1:5])
+	dictSize, err := DecodeDictSize(header[1:5])
 	if err != nil {
 		return fmt.Errorf("decode dict size: %w", err)
 	}
 
 	r.outWindow = newWindow(dictSize)
 
-	unpackSize := r.decodeUnpackSize(header[5:])
+	unpackSize := DecodeUnpackSize(header[5:])
 
 	return r.initialize(lc, pb, lp, unpackSize)
 }
@@ -101,7 +112,7 @@ func (r *Reader1) Reopen(inStream io.Reader, unpackSize uint64) error {
 	return nil
 }
 
-func (r *Reader1) decodeUnpackSize(header []byte) uint64 {
+func DecodeUnpackSize(header []byte) uint64 {
 	var (
 		b          byte
 		unpackSize uint64
@@ -116,7 +127,7 @@ func (r *Reader1) decodeUnpackSize(header []byte) uint64 {
 	return unpackSize
 }
 
-func (r *Reader1) decodeDictSize(properties []byte) (uint32, error) {
+func DecodeDictSize(properties []byte) (uint32, error) {
 	dictSize := uint32(0)
 	for i := 0; i < 4; i++ {
 		dictSize |= uint32(properties[i]) << (8 * i)
@@ -133,7 +144,7 @@ func (r *Reader1) decodeDictSize(properties []byte) (uint32, error) {
 	return dictSize, nil
 }
 
-func decodeProp(d byte) (uint8, uint8, uint8) {
+func DecodeProp(d byte) (uint8, uint8, uint8) {
 	lc := d % 9
 	d /= 9
 	pb := d / 5

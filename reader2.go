@@ -106,7 +106,7 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize++
 
 	if r.lzmaReader == nil {
-		r.lzmaReader, err = NewReader1WithOptions(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
+		r.lzmaReader, err = NewReader1WithOptionsAndWindow(io.LimitReader(r.inStream, int64(r.chunkCompressedSize)), r.header[5], uint64(r.chunkUncompressedSize), r.outWindow)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (r *Reader2) startChunk() error {
 	case chunkLZMAResetState:
 		r.lzmaReader.s.Reset()
 	case chunkLZMAResetStateNewProp, chunkLZMAResetStateNewPropResetDict:
-		lc, pb, lp := decodeProp(r.header[5])
+		lc, pb, lp := DecodeProp(r.header[5])
 
 		r.lzmaReader.s = newState(lc, pb, lp)
 	}
@@ -279,4 +279,8 @@ func (r *Reader2) uncompressedRead(p []byte) (n int, err error) {
 	}
 
 	return
+}
+
+func DecodeDictSize2(encodedDictSize byte) uint32 {
+	return uint32(2|(encodedDictSize&1)) << (encodedDictSize/2 + 11)
 }
