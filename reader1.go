@@ -204,7 +204,7 @@ func printOp(op string) {
 	//}
 }
 
-var opCounter = int64(0)
+//var opCounter = int64(0)
 
 func (r *Reader1) decodeOperation() error {
 	var err error
@@ -218,12 +218,12 @@ func (r *Reader1) decodeOperation() error {
 	}
 
 	s.posState = r.outWindow.TotalPos & s.posMask
-	opCounter++
+	//opCounter++
 
-	if chunkCounter == 1 && opCounter == 15237 {
-		a := 5
-		_ = a
-	}
+	//if chunkCounter == 1 && opCounter == 15237 {
+	//	a := 5
+	//	_ = a
+	//}
 
 	if r.rangeDec.DecodeBit(&s.isMatch[(s.state<<kNumPosBitsMax)+s.posState]) == 0 { // literal
 		printOp("l")

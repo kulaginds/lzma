@@ -57,7 +57,7 @@ func (r *Reader2) validateDictSize() error {
 	return nil
 }
 
-var chunkCounter = int64(0)
+//var chunkCounter = int64(0)
 
 func (r *Reader2) startChunk() error {
 	_, err := r.inStream.Read(r.header[0:1])
@@ -74,8 +74,8 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = 0
 
 	r.chunkType = decodeChunkType(r.header[0])
-	chunkCounter++
-	opCounter = 0
+	//chunkCounter++
+	//opCounter = 0
 	//printChunk(r.chunkType)
 	if r.chunkType == chunkEndOfStream {
 		return nil
@@ -151,7 +151,8 @@ func printChunk(chunkType chunkType) {
 		name = "cLRND"
 	}
 
-	fmt.Println(name, chunkCounter)
+	//fmt.Println(name, chunkCounter)
+	_ = name
 }
 
 func decodeChunkType(chunkCode byte) chunkType {
