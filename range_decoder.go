@@ -56,47 +56,53 @@ func (d *rangeDecoder) Reopen(inStream io.ByteReader) error {
 
 func (d *rangeDecoder) DecodeBit(prob *prob) (uint32, error) {
 	v := *prob
-	bound := (d.Range >> kNumBitModelTotalBits) * uint32(v)
+	rang := d.Range
+	code := d.Code
+	bound := (rang >> kNumBitModelTotalBits) * uint32(v)
 
 	var symbol uint32
 
-	if d.Code < bound {
+	if code < bound {
 		v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
-		d.Range = bound
+		rang = bound
 		symbol = 0
 	} else {
 		v -= v >> kNumMoveBits
-		d.Code -= bound
-		d.Range -= bound
+		code -= bound
+		rang -= bound
 		symbol = 1
 	}
 
-	*prob = v
-
 	// Normalize
-	if d.Range < kTopValue {
+	if rang < kTopValue {
 		b, err := d.inStream.ReadByte()
 		if err != nil {
 			return 0, err
 		}
 
-		d.Range <<= 8
-		d.Code = (d.Code << 8) | uint32(b)
+		rang <<= 8
+		code = (code << 8) | uint32(b)
 	}
+
+	*prob = v
+	d.Range = rang
+	d.Code = code
 
 	return symbol, nil
 }
 
 func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 	var res uint32
+	rang := d.Range
+	code := d.Code
 
 	for ; numBits > 0; numBits-- {
-		d.Range >>= 1
-		d.Code -= d.Range
-		t := 0 - (d.Code >> 31)
-		d.Code += d.Range & t
+		rang >>= 1
+		code -= rang
+		t := 0 - (code >> 31)
+		code += rang & t
 
-		if d.Code == d.Range {
+		if code == rang {
 			d.Corrupted = true
 		}
 
@@ -104,16 +110,19 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 		res += t + 1
 
 		// Normalize
-		if d.Range < kTopValue {
+		if rang < kTopValue {
 			b, err := d.inStream.ReadByte()
 			if err != nil {
 				return 0, err
 			}
 
-			d.Range <<= 8
-			d.Code = (d.Code << 8) | uint32(b)
+			rang <<= 8
+			code = (code << 8) | uint32(b)
 		}
 	}
+
+	d.Range = rang
+	d.Code = code
 
 	return res, nil
 }
