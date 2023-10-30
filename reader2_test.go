@@ -33,7 +33,7 @@ func TestReader2WithFileVerification(t *testing.T) {
 // pkg: github.com/kulaginds/lzma
 // cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 // BenchmarkReader2
-// BenchmarkReader2-12    	     580	   1925334 ns/op	 544.65 MB/s	 8390408 B/op	      28 allocs/op
+// BenchmarkReader2-12    	     560	   2125693 ns/op	 493.32 MB/s	 8395010 B/op	      30 allocs/op
 
 func BenchmarkReader2(b *testing.B) {
 	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma2")

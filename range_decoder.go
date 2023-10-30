@@ -100,6 +100,9 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 			d.Corrupted = true
 		}
 
+		res <<= 1
+		res += t + 1
+
 		// Normalize
 		if d.Range < kTopValue {
 			b, err := d.inStream.ReadByte()
@@ -110,9 +113,6 @@ func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
 			d.Range <<= 8
 			d.Code = (d.Code << 8) | uint32(b)
 		}
-
-		res <<= 1
-		res += t + 1
 	}
 
 	return res, nil

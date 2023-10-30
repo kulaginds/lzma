@@ -240,7 +240,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 func (r *Reader1) decompress() (err error) {
 	for r.outWindow.Available() >= maxMatchLen {
 		err = r.decodeOperation()
-		if errors.Is(err, io.EOF) {
+		if err == io.EOF {
 			if !r.rangeDec.IsFinishedOK() {
 				err = ErrResultError
 			}
@@ -270,7 +270,7 @@ func (r *Reader1) decodeOperation() error {
 		}
 	}
 
-	s.posState = r.outWindow.TotalPos & s.posMask
+	s.posState = r.outWindow.pos & s.posMask
 	state2 := (s.state << kNumPosBitsMax) + s.posState
 	r.opCounter++
 
@@ -421,7 +421,7 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 	}
 
 	symbol := uint32(1)
-	litState := ((r.outWindow.TotalPos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
+	litState := ((r.outWindow.pos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
 	probs := s.litProbs[(uint32(0x300) * litState):]
 
 	var (
@@ -432,8 +432,10 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 	if state >= 7 {
 		matchByte := r.outWindow.GetByte(rep0 + 1)
 
+		var matchBit uint32
+
 		for symbol < 0x100 {
-			matchBit := uint32((matchByte >> 7) & 1)
+			matchBit = uint32((matchByte >> 7) & 1)
 			matchByte <<= 1
 
 			bit, err = r.rangeDec.DecodeBit(&probs[((1+matchBit)<<8)+symbol])
