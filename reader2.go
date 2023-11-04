@@ -115,17 +115,18 @@ func (r *Reader2) startChunk() error {
 	}
 
 	r.chunkUncompressedSize = (uint32(r.header[1]) << 8) | uint32(r.header[2])
-	r.chunkUncompressedSize++
 
 	if isChunkResetDict[r.chunkType] {
 		r.outWindow.Reset()
 	}
 
 	if isChunkUncompressed[r.chunkType] {
+		r.chunkUncompressedSize++
 		return nil
 	}
 
 	r.chunkUncompressedSize |= uint32(r.header[0]&maskLZMAUncompressedSize) << 16
+	r.chunkUncompressedSize++
 	r.chunkCompressedSize = (uint16(r.header[3]) << 8) | uint16(r.header[4])
 	r.chunkCompressedSize++
 
