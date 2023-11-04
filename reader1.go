@@ -279,9 +279,9 @@ func (r *Reader1) decodeOperation() error {
 		return err
 	}
 	if bit == 0 { // literal
-		if s.unpackSizeDefined && s.bytesLeft == 0 {
-			return ErrResultError
-		}
+		//if s.unpackSizeDefined && s.bytesLeft == 0 {
+		//	return ErrResultError
+		//}
 
 		r.printOp("l")
 		err = r.DecodeLiteral(s.state, s.rep0)
