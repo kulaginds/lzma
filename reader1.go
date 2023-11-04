@@ -226,7 +226,7 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 			return
 		}
 
-		err = r.decompress()
+		err = r.decompress(uint32(len(p) - n))
 		if errors.Is(err, io.EOF) {
 			r.isEndOfStream = true
 			err = nil
@@ -237,8 +237,8 @@ func (r *Reader1) Read(p []byte) (n int, err error) {
 	}
 }
 
-func (r *Reader1) decompress() (err error) {
-	for r.outWindow.Available() >= maxMatchLen {
+func (r *Reader1) decompress(needBytesCount uint32) (err error) {
+	for r.outWindow.pending < needBytesCount {
 		err = r.decodeOperation()
 		if err == io.EOF {
 			if !r.rangeDec.IsFinishedOK() {
