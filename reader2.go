@@ -154,7 +154,7 @@ func (r *Reader2) startChunk() error {
 			return err
 		}
 
-		r.lzmaReader.s = newState(lc, pb, lp)
+		r.lzmaReader.s.Renew(lc, pb, lp)
 	}
 
 	err = r.lzmaReader.Reopen(limitByteReader(r.inStream, int64(r.chunkCompressedSize)), uint64(r.chunkUncompressedSize))

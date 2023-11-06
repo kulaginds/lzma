@@ -64,6 +64,22 @@ func newState(lc, pb, lp uint8) *state {
 	return s
 }
 
+func (s *state) Renew(lc, pb, lp uint8) {
+	s.lc = lc
+	s.pb = pb
+	s.lp = lp
+	s.posMask = (1 << pb) - 1
+
+	litProbsCount := int(0x300) << (lc + lp)
+	if litProbsCount > cap(s.litProbs) {
+		s.litProbs = make([]prob, litProbsCount)
+	} else {
+		s.litProbs = s.litProbs[:litProbsCount]
+	}
+
+	s.Reset()
+}
+
 func (s *state) Reset() {
 	initProbs(s.litProbs)
 
