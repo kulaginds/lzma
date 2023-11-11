@@ -284,10 +284,110 @@ func (r *Reader1) decodeOperation() error {
 		}
 
 		r.printOp("l")
-		err = r.DecodeLiteral(s.state, s.rep0)
-		if err != nil {
-			return fmt.Errorf("decode literal: %w", err)
+		//err = r.DecodeLiteral(s.state, s.rep0)
+		//if err != nil {
+		//	return fmt.Errorf("decode literal: %w", err)
+		//}
+
+		// DecodeLiteral begin
+		prevByte := uint32(0)
+		if !r.outWindow.IsEmpty() {
+			prevByte = uint32(r.outWindow.GetByte(1))
 		}
+
+		symbol := uint32(1)
+		litState := ((r.outWindow.pos & ((1 << r.s.lp) - 1)) << r.s.lc) + (prevByte >> (8 - r.s.lc))
+		probs := r.s.litProbs[(uint32(0x300) * litState):]
+		rang := r.rangeDec.Range
+		code := r.rangeDec.Code
+
+		var (
+			bit uint32
+		)
+
+		if s.state >= 7 {
+			matchByte := r.outWindow.GetByte(s.rep0 + 1)
+
+			var matchBit uint32
+
+			for symbol < 0x100 {
+				matchBit = uint32((matchByte >> 7) & 1)
+				matchByte <<= 1
+
+				// rc.DecodeBit begin
+				v := probs[((1+matchBit)<<8)+symbol]
+				bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+
+				if code < bound {
+					v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+					rang = bound
+					bit = 0
+				} else {
+					v -= v >> kNumMoveBits
+					code -= bound
+					rang -= bound
+					bit = 1
+				}
+
+				// Normalize
+				if rang < kTopValue {
+					b, err := r.rangeDec.inStream.ReadByte()
+					if err != nil {
+						return err
+					}
+
+					rang <<= 8
+					code = (code << 8) | uint32(b)
+				}
+
+				probs[((1+matchBit)<<8)+symbol] = v
+				// rc.DecodeBit end
+
+				symbol = (symbol << 1) | bit
+				if matchBit != bit {
+					break
+				}
+			}
+		}
+
+		for symbol < 0x100 {
+			// rc.DecodeBit begin
+			v := probs[symbol]
+			bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+
+			if code < bound {
+				v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+				rang = bound
+				bit = 0
+			} else {
+				v -= v >> kNumMoveBits
+				code -= bound
+				rang -= bound
+				bit = 1
+			}
+
+			// Normalize
+			if rang < kTopValue {
+				b, err := r.rangeDec.inStream.ReadByte()
+				if err != nil {
+					return err
+				}
+
+				rang <<= 8
+				code = (code << 8) | uint32(b)
+			}
+
+			probs[symbol] = v
+			// rc.DecodeBit end
+
+			symbol = (symbol << 1) | bit
+		}
+
+		r.rangeDec.Range = rang
+		r.rangeDec.Code = code
+
+		r.outWindow.PutByte(byte(symbol - 0x100))
+		// DecodeLiteral end
 
 		s.state = stateUpdateLiteral(s.state)
 		s.bytesLeft--
@@ -305,15 +405,225 @@ func (r *Reader1) decodeOperation() error {
 		s.rep3, s.rep2, s.rep1 = s.rep2, s.rep1, s.rep0
 
 		r.printOp("m")
-		length, err = s.lenDecoder.Decode(r.rangeDec, s.posState)
+		//length, err = s.lenDecoder.Decode(r.rangeDec, s.posState)
+		//if err != nil {
+		//	return err
+		//}
+
+		// lenDecoder.Decode begin
+		bit, err := r.rangeDec.DecodeBit(&s.lenDecoder.choice)
 		if err != nil {
 			return err
 		}
+		if bit == 0 {
+			length, err = s.lenDecoder.lowCoder[s.posState].Decode(r.rangeDec)
+			if err != nil {
+				return err
+			}
+		} else {
+			bit, err = r.rangeDec.DecodeBit(&s.lenDecoder.choice2)
+			if err != nil {
+				return err
+			}
+			if bit == 0 {
+				bit, err = s.lenDecoder.midCoder[s.posState].Decode(r.rangeDec)
+				if err != nil {
+					return err
+				}
+
+				length = 8 + bit
+			} else {
+				bit, err = s.lenDecoder.highCoder.Decode(r.rangeDec)
+				if err != nil {
+					return err
+				}
+
+				length = 16 + bit
+			}
+		}
+		// lenDecoder.Decode end
+
 		s.state = stateUpdateMatch(s.state)
-		s.rep0, err = r.DecodeDistance(length)
+		//s.rep0, err = r.DecodeDistance(length)
+		//if err != nil {
+		//	return err
+		//}
+
+		// DecodeDistance begin
+		lenState := length
+		if lenState > (kNumLenToPosStates - 1) {
+			lenState = kNumLenToPosStates - 1
+		}
+
+		posSlot, err := s.posSlotDecoder[lenState].Decode(r.rangeDec)
 		if err != nil {
 			return err
 		}
+
+		if posSlot < 4 {
+			s.rep0 = posSlot
+		} else {
+			numDirectBits := (posSlot >> 1) - 1
+			dist := (2 | (posSlot & 1)) << numDirectBits
+
+			if posSlot < kEndPosModelIndex {
+				//bit, err = BitTreeReverseDecode(s.posDecoders[dist-posSlot:], int(numDirectBits), r.rangeDec)
+				//if err != nil {
+				//	return err
+				//}
+
+				// BitTreeReverseDecode begin
+				rang := r.rangeDec.Range
+				code := r.rangeDec.Code
+				probs := s.posDecoders[dist-posSlot:]
+
+				var bit uint32
+
+				m := uint32(1)
+				symbol := uint32(0)
+
+				for i := uint32(0); i < numDirectBits; i++ {
+					// rc.DecodeBit begin
+					v := probs[m]
+					bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+
+					if code < bound {
+						v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+						rang = bound
+						bit = 0
+					} else {
+						v -= v >> kNumMoveBits
+						code -= bound
+						rang -= bound
+						bit = 1
+					}
+
+					// Normalize
+					if rang < kTopValue {
+						b, err := r.rangeDec.inStream.ReadByte()
+						if err != nil {
+							return err
+						}
+
+						rang <<= 8
+						code = (code << 8) | uint32(b)
+					}
+
+					probs[m] = v
+					// rc.DecodeBit end
+
+					m = (m << 1) | bit
+					symbol |= bit << i
+				}
+
+				r.rangeDec.Range = rang
+				r.rangeDec.Code = code
+				// BitTreeReverseDecode end
+
+				dist += symbol
+			} else {
+				//bit, err = r.rangeDec.DecodeDirectBits(int(numDirectBits - kNumAlignBits))
+				//if err != nil {
+				//	return err
+				//}
+
+				// DecodeDirectBits begin
+				var res uint32
+				rang := r.rangeDec.Range
+				code := r.rangeDec.Code
+				numBits := numDirectBits - kNumAlignBits
+
+				for ; numBits > 0; numBits-- {
+					rang >>= 1
+					code -= rang
+					t := 0 - (code >> 31)
+					code += rang & t
+
+					if code == rang {
+						r.rangeDec.Corrupted = true
+					}
+
+					res <<= 1
+					res += t + 1
+
+					// Normalize
+					if rang < kTopValue {
+						b, err := r.rangeDec.inStream.ReadByte()
+						if err != nil {
+							return err
+						}
+
+						rang <<= 8
+						code = (code << 8) | uint32(b)
+					}
+				}
+
+				r.rangeDec.Range = rang
+				r.rangeDec.Code = code
+				// DecodeDirectBits end
+
+				dist += res << kNumAlignBits
+
+				//bit, err = BitTreeReverseDecode(s.alignDecoder.probs, s.alignDecoder.numBits, r.rangeDec)
+				//if err != nil {
+				//	return err
+				//}
+
+				// BitTreeReverseDecode begin
+				rang = r.rangeDec.Range
+				code = r.rangeDec.Code
+				probs := s.alignDecoder.probs
+
+				var bit uint32
+
+				m := uint32(1)
+				symbol := uint32(0)
+
+				for i := 0; i < s.alignDecoder.numBits; i++ {
+					// rc.DecodeBit begin
+					v := probs[m]
+					bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+
+					if code < bound {
+						v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+						rang = bound
+						bit = 0
+					} else {
+						v -= v >> kNumMoveBits
+						code -= bound
+						rang -= bound
+						bit = 1
+					}
+
+					// Normalize
+					if rang < kTopValue {
+						b, err := r.rangeDec.inStream.ReadByte()
+						if err != nil {
+							return err
+						}
+
+						rang <<= 8
+						code = (code << 8) | uint32(b)
+					}
+
+					probs[m] = v
+					// rc.DecodeBit end
+
+					m = (m << 1) | bit
+					symbol |= bit << i
+				}
+
+				r.rangeDec.Range = rang
+				r.rangeDec.Code = code
+				// BitTreeReverseDecode end
+
+				dist += symbol
+			}
+
+			s.rep0 = dist
+		}
+
+		// DecodeDistance end
 
 		if s.rep0 == 0xFFFFFFFF {
 			if r.rangeDec.IsFinishedOK() {
@@ -388,10 +698,42 @@ func (r *Reader1) decodeOperation() error {
 		}
 
 		r.printOp("r")
-		length, err = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
+		//length, err = r.s.repLenDecoder.Decode(r.rangeDec, s.posState)
+		//if err != nil {
+		//	return err
+		//}
+
+		// r.s.repLenDecoder.Decode begin
+		bit, err := r.rangeDec.DecodeBit(&r.s.repLenDecoder.choice)
 		if err != nil {
 			return err
 		}
+		if bit == 0 {
+			length, err = r.s.repLenDecoder.lowCoder[s.posState].Decode(r.rangeDec)
+			if err != nil {
+				return err
+			}
+		} else {
+			bit, err = r.rangeDec.DecodeBit(&r.s.repLenDecoder.choice2)
+			if err != nil {
+				return err
+			}
+			if bit == 0 {
+				bit, err = r.s.repLenDecoder.midCoder[s.posState].Decode(r.rangeDec)
+				if err != nil {
+					return err
+				}
+				length = 8 + bit
+			} else {
+				bit, err = r.s.repLenDecoder.highCoder.Decode(r.rangeDec)
+				if err != nil {
+					return err
+				}
+				length = 16 + bit
+			}
+		}
+		// r.s.repLenDecoder.Decode end
+
 		s.state = stateUpdateRep(s.state)
 	}
 
