@@ -100,7 +100,7 @@ func (r *Reader2) startChunk() error {
 
 	r.chunkType = decodeChunkType(r.header[0])
 	r.chunkCounter++
-	//r.printChunk(r.chunkType)
+	r.printChunk(r.chunkType)
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
