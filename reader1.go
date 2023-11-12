@@ -13,8 +13,8 @@ type Reader1 struct {
 	s             *state
 	isEndOfStream bool
 
-	chunkCounter int64
-	opCounter    int64
+	//chunkCounter int64
+	//opCounter    int64
 }
 
 func NewReader1(inStream io.ByteReader) (*Reader1, error) {
@@ -272,7 +272,7 @@ func (r *Reader1) decodeOperation() error {
 
 	s.posState = r.outWindow.pos & s.posMask
 	state2 := (s.state << kNumPosBitsMax) + s.posState
-	r.opCounter++
+	//r.opCounter++
 
 	bit, err := r.rangeDec.DecodeBit(&s.isMatch[state2])
 	if err != nil {
