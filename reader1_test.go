@@ -111,7 +111,7 @@ const randomFileMD5 = "b2d18c4275c394a729607ff9fe0caae7"
 // pkg: github.com/kulaginds/lzma
 // cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 // BenchmarkReader1
-// BenchmarkReader1-12    	      13	  81601083 ns/op	  13.03 MB/s	 8410759 B/op	     164 allocs/op
+// BenchmarkReader1-12    	      14	  72011619 ns/op	  14.56 MB/s	 8412466 B/op	     165 allocs/op
 
 func BenchmarkReader1(b *testing.B) {
 	compressedData, err := os.ReadFile("testassets/randomfile.dat.lzma")
@@ -122,7 +122,6 @@ func BenchmarkReader1(b *testing.B) {
 	var r *Reader1
 
 	b.ResetTimer()
-	b.SetBytes(int64(len(compressedData)))
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
@@ -130,9 +129,12 @@ func BenchmarkReader1(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, err = io.Copy(io.Discard, r)
+
+		var n int64
+		n, err = io.Copy(io.Discard, r)
 		if err != nil {
 			b.Fatal(err)
 		}
+		b.SetBytes(n)
 	}
 }

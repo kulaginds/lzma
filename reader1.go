@@ -301,10 +301,6 @@ func (r *Reader1) decodeOperation() error {
 		rang := r.rangeDec.Range
 		code := r.rangeDec.Code
 
-		var (
-			bit uint32
-		)
-
 		if s.state >= 7 {
 			matchByte := r.outWindow.GetByte(s.rep0 + 1)
 
@@ -321,32 +317,46 @@ func (r *Reader1) decodeOperation() error {
 				if code < bound {
 					v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 					rang = bound
-					bit = 0
+					probs[((1+matchBit)<<8)+symbol] = v
+					symbol <<= 1
+
+					// Normalize
+					if rang < kTopValue {
+						b, err := r.rangeDec.inStream.ReadByte()
+						if err != nil {
+							return err
+						}
+
+						rang <<= 8
+						code = (code << 8) | uint32(b)
+					}
+
+					if matchBit != 0 {
+						break
+					}
 				} else {
 					v -= v >> kNumMoveBits
 					code -= bound
 					rang -= bound
-					bit = 1
-				}
+					probs[((1+matchBit)<<8)+symbol] = v
+					symbol = (symbol << 1) | 1
 
-				// Normalize
-				if rang < kTopValue {
-					b, err := r.rangeDec.inStream.ReadByte()
-					if err != nil {
-						return err
+					// Normalize
+					if rang < kTopValue {
+						b, err := r.rangeDec.inStream.ReadByte()
+						if err != nil {
+							return err
+						}
+
+						rang <<= 8
+						code = (code << 8) | uint32(b)
 					}
 
-					rang <<= 8
-					code = (code << 8) | uint32(b)
+					if matchBit != 1 {
+						break
+					}
 				}
-
-				probs[((1+matchBit)<<8)+symbol] = v
 				// rc.DecodeBit end
-
-				symbol = (symbol << 1) | bit
-				if matchBit != bit {
-					break
-				}
 			}
 		}
 
@@ -358,29 +368,38 @@ func (r *Reader1) decodeOperation() error {
 			if code < bound {
 				v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 				rang = bound
-				bit = 0
+				probs[symbol] = v
+				symbol <<= 1
+
+				// Normalize
+				if rang < kTopValue {
+					b, err := r.rangeDec.inStream.ReadByte()
+					if err != nil {
+						return err
+					}
+
+					rang <<= 8
+					code = (code << 8) | uint32(b)
+				}
 			} else {
 				v -= v >> kNumMoveBits
 				code -= bound
 				rang -= bound
-				bit = 1
-			}
+				probs[symbol] = v
+				symbol = (symbol << 1) | 1
 
-			// Normalize
-			if rang < kTopValue {
-				b, err := r.rangeDec.inStream.ReadByte()
-				if err != nil {
-					return err
+				// Normalize
+				if rang < kTopValue {
+					b, err := r.rangeDec.inStream.ReadByte()
+					if err != nil {
+						return err
+					}
+
+					rang <<= 8
+					code = (code << 8) | uint32(b)
 				}
-
-				rang <<= 8
-				code = (code << 8) | uint32(b)
 			}
-
-			probs[symbol] = v
 			// rc.DecodeBit end
-
-			symbol = (symbol << 1) | bit
 		}
 
 		r.rangeDec.Range = rang
@@ -491,25 +510,38 @@ func (r *Reader1) decodeOperation() error {
 						v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 						rang = bound
 						bit = 0
+
+						// Normalize
+						if rang < kTopValue {
+							b, err := r.rangeDec.inStream.ReadByte()
+							if err != nil {
+								return err
+							}
+
+							rang <<= 8
+							code = (code << 8) | uint32(b)
+						}
+
+						probs[m] = v
 					} else {
 						v -= v >> kNumMoveBits
 						code -= bound
 						rang -= bound
 						bit = 1
-					}
 
-					// Normalize
-					if rang < kTopValue {
-						b, err := r.rangeDec.inStream.ReadByte()
-						if err != nil {
-							return err
+						// Normalize
+						if rang < kTopValue {
+							b, err := r.rangeDec.inStream.ReadByte()
+							if err != nil {
+								return err
+							}
+
+							rang <<= 8
+							code = (code << 8) | uint32(b)
 						}
 
-						rang <<= 8
-						code = (code << 8) | uint32(b)
+						probs[m] = v
 					}
-
-					probs[m] = v
 					// rc.DecodeBit end
 
 					m = (m << 1) | bit
@@ -588,25 +620,38 @@ func (r *Reader1) decodeOperation() error {
 						v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 						rang = bound
 						bit = 0
+
+						// Normalize
+						if rang < kTopValue {
+							b, err := r.rangeDec.inStream.ReadByte()
+							if err != nil {
+								return err
+							}
+
+							rang <<= 8
+							code = (code << 8) | uint32(b)
+						}
+
+						probs[m] = v
 					} else {
 						v -= v >> kNumMoveBits
 						code -= bound
 						rang -= bound
 						bit = 1
-					}
 
-					// Normalize
-					if rang < kTopValue {
-						b, err := r.rangeDec.inStream.ReadByte()
-						if err != nil {
-							return err
+						// Normalize
+						if rang < kTopValue {
+							b, err := r.rangeDec.inStream.ReadByte()
+							if err != nil {
+								return err
+							}
+
+							rang <<= 8
+							code = (code << 8) | uint32(b)
 						}
 
-						rang <<= 8
-						code = (code << 8) | uint32(b)
+						probs[m] = v
 					}
-
-					probs[m] = v
 					// rc.DecodeBit end
 
 					m = (m << 1) | bit
@@ -788,25 +833,38 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 				v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 				rang = bound
 				bit = 0
+
+				// Normalize
+				if rang < kTopValue {
+					b, err := r.rangeDec.inStream.ReadByte()
+					if err != nil {
+						return err
+					}
+
+					rang <<= 8
+					code = (code << 8) | uint32(b)
+				}
+
+				probs[((1+matchBit)<<8)+symbol] = v
 			} else {
 				v -= v >> kNumMoveBits
 				code -= bound
 				rang -= bound
 				bit = 1
-			}
 
-			// Normalize
-			if rang < kTopValue {
-				b, err := r.rangeDec.inStream.ReadByte()
-				if err != nil {
-					return err
+				// Normalize
+				if rang < kTopValue {
+					b, err := r.rangeDec.inStream.ReadByte()
+					if err != nil {
+						return err
+					}
+
+					rang <<= 8
+					code = (code << 8) | uint32(b)
 				}
 
-				rang <<= 8
-				code = (code << 8) | uint32(b)
+				probs[((1+matchBit)<<8)+symbol] = v
 			}
-
-			probs[((1+matchBit)<<8)+symbol] = v
 			// rc.DecodeBit end
 
 			symbol = (symbol << 1) | bit
@@ -825,25 +883,38 @@ func (r *Reader1) DecodeLiteral(state uint32, rep0 uint32) error {
 			v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 			rang = bound
 			bit = 0
+
+			// Normalize
+			if rang < kTopValue {
+				b, err := r.rangeDec.inStream.ReadByte()
+				if err != nil {
+					return err
+				}
+
+				rang <<= 8
+				code = (code << 8) | uint32(b)
+			}
+
+			probs[symbol] = v
 		} else {
 			v -= v >> kNumMoveBits
 			code -= bound
 			rang -= bound
 			bit = 1
-		}
 
-		// Normalize
-		if rang < kTopValue {
-			b, err := r.rangeDec.inStream.ReadByte()
-			if err != nil {
-				return err
+			// Normalize
+			if rang < kTopValue {
+				b, err := r.rangeDec.inStream.ReadByte()
+				if err != nil {
+					return err
+				}
+
+				rang <<= 8
+				code = (code << 8) | uint32(b)
 			}
 
-			rang <<= 8
-			code = (code << 8) | uint32(b)
+			probs[symbol] = v
 		}
-
-		probs[symbol] = v
 		// rc.DecodeBit end
 
 		symbol = (symbol << 1) | bit

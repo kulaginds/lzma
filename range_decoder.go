@@ -60,35 +60,60 @@ func (d *rangeDecoder) DecodeBit(prob *prob) (uint32, error) {
 	code := d.Code
 	bound := (rang >> kNumBitModelTotalBits) * uint32(v)
 
-	var symbol uint32
-
 	if code < bound {
 		v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
 		rang = bound
-		symbol = 0
+
+		// Normalize
+		if rang < kTopValue {
+			b, err := d.inStream.ReadByte()
+			if err != nil {
+				return 0, err
+			}
+
+			rang <<= 8
+			code = (code << 8) | uint32(b)
+
+			*prob = v
+			d.Range = rang
+			d.Code = code
+
+			return 0, nil
+		} else {
+			*prob = v
+			d.Range = rang
+			d.Code = code
+
+			return 0, nil
+		}
 	} else {
 		v -= v >> kNumMoveBits
 		code -= bound
 		rang -= bound
-		symbol = 1
-	}
 
-	// Normalize
-	if rang < kTopValue {
-		b, err := d.inStream.ReadByte()
-		if err != nil {
-			return 0, err
+		// Normalize
+		if rang < kTopValue {
+			b, err := d.inStream.ReadByte()
+			if err != nil {
+				return 0, err
+			}
+
+			rang <<= 8
+			code = (code << 8) | uint32(b)
+
+			*prob = v
+			d.Range = rang
+			d.Code = code
+
+			return 1, nil
+		} else {
+			*prob = v
+			d.Range = rang
+			d.Code = code
+
+			return 1, nil
 		}
-
-		rang <<= 8
-		code = (code << 8) | uint32(b)
 	}
-
-	*prob = v
-	d.Range = rang
-	d.Code = code
-
-	return symbol, nil
 }
 
 func (d *rangeDecoder) DecodeDirectBits(numBits int) (uint32, error) {
