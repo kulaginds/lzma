@@ -54,63 +54,44 @@ func (d *rangeDecoder) Reopen(inStream io.ByteReader) error {
 	return d.Init()
 }
 
-func (d *rangeDecoder) DecodeBit(prob *prob) (uint32, error) {
-	v := *prob
-	rang := d.Range
-	code := d.Code
-	bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+func (d *rangeDecoder) DecodeBit(v *prob) (uint32, error) {
+	bound := (d.Range >> kNumBitModelTotalBits) * uint32(*v)
 
-	if code < bound {
-		v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
-		rang = bound
+	if d.Code < bound {
+		*v += ((1 << kNumBitModelTotalBits) - *v) >> kNumMoveBits
+		d.Range = bound
 
 		// Normalize
-		if rang < kTopValue {
+		if d.Range < kTopValue {
 			b, err := d.inStream.ReadByte()
 			if err != nil {
 				return 0, err
 			}
 
-			rang <<= 8
-			code = (code << 8) | uint32(b)
-
-			*prob = v
-			d.Range = rang
-			d.Code = code
+			d.Range <<= 8
+			d.Code = (d.Code << 8) | uint32(b)
 
 			return 0, nil
 		} else {
-			*prob = v
-			d.Range = rang
-			d.Code = code
-
 			return 0, nil
 		}
 	} else {
-		v -= v >> kNumMoveBits
-		code -= bound
-		rang -= bound
+		*v -= *v >> kNumMoveBits
+		d.Code -= bound
+		d.Range -= bound
 
 		// Normalize
-		if rang < kTopValue {
+		if d.Range < kTopValue {
 			b, err := d.inStream.ReadByte()
 			if err != nil {
 				return 0, err
 			}
 
-			rang <<= 8
-			code = (code << 8) | uint32(b)
-
-			*prob = v
-			d.Range = rang
-			d.Code = code
+			d.Range <<= 8
+			d.Code = (d.Code << 8) | uint32(b)
 
 			return 1, nil
 		} else {
-			*prob = v
-			d.Range = rang
-			d.Code = code
-
 			return 1, nil
 		}
 	}

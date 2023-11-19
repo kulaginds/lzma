@@ -21,8 +21,6 @@ type Reader2 struct {
 	chunkCompressedSize   uint16
 
 	limitReader io.Reader
-
-	//chunkCounter int64
 }
 
 func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
@@ -99,8 +97,6 @@ func (r *Reader2) startChunk() error {
 	r.chunkCompressedSize = 0
 
 	r.chunkType = decodeChunkType(r.header[0])
-	//r.chunkCounter++
-	//r.printChunk(r.chunkType)
 	if r.chunkType == chunkEndOfStream {
 		return nil
 	}
@@ -136,14 +132,8 @@ func (r *Reader2) startChunk() error {
 			return err
 		}
 
-		//r.lzmaReader.chunkCounter = r.chunkCounter
-		//r.lzmaReader.opCounter = 0
-
 		return nil
 	}
-
-	//r.lzmaReader.chunkCounter = r.chunkCounter
-	//r.lzmaReader.opCounter = 0
 
 	switch r.chunkType {
 	case chunkLZMAResetState:
@@ -163,30 +153,6 @@ func (r *Reader2) startChunk() error {
 	}
 
 	return nil
-}
-
-func (r *Reader2) printChunk(chunkType chunkType) {
-	name := ""
-
-	switch chunkType {
-	case chunkEndOfStream:
-		name = "cEOS"
-	case chunkUncompressedResetDict:
-		name = "cUD"
-	case chunkUncompressedNoResetDict:
-		name = "cU"
-	case chunkLZMANoReset:
-		name = "cL"
-	case chunkLZMAResetState:
-		name = "cLR"
-	case chunkLZMAResetStateNewProp:
-		name = "cLRN"
-	case chunkLZMAResetStateNewPropResetDict:
-		name = "cLRND"
-	}
-
-	//fmt.Println(name, r.chunkCounter)
-	_ = name
 }
 
 func decodeChunkType(chunkCode byte) chunkType {

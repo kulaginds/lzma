@@ -1,5 +1,7 @@
 package lzma
 
+import "unsafe"
+
 type bitTreeDecoder struct {
 	probs   []prob
 	numBits int
@@ -24,16 +26,16 @@ func (d *bitTreeDecoder) Decode(rc *rangeDecoder) (uint32, error) {
 
 	rang := rc.Range
 	code := rc.Code
+	probsPtr := uintptr(unsafe.Pointer(&d.probs[0]))
 
 	for i := 0; i < d.numBits; i++ {
+		probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 		// rc.DecodeBit begin
-		v := d.probs[m]
-		bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+		bound := (rang >> kNumBitModelTotalBits) * uint32(*probPtr)
 
 		if code < bound {
-			v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+			*probPtr += ((1 << kNumBitModelTotalBits) - *probPtr) >> kNumMoveBits
 			rang = bound
-			d.probs[m] = v
 			m <<= 1
 
 			// Normalize
@@ -47,10 +49,9 @@ func (d *bitTreeDecoder) Decode(rc *rangeDecoder) (uint32, error) {
 				code = (code << 8) | uint32(b)
 			}
 		} else {
-			v -= v >> kNumMoveBits
+			*probPtr -= *probPtr >> kNumMoveBits
 			code -= bound
 			rang -= bound
-			d.probs[m] = v
 			m = (m << 1) + 1
 
 			// Normalize
@@ -83,16 +84,16 @@ func BitTreeReverseDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, 
 
 	m := uint32(1)
 	symbol := uint32(0)
+	probsPtr := uintptr(unsafe.Pointer(&probs[0]))
 
 	for i := 0; i < numBits; i++ {
+		probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 		// rc.DecodeBit begin
-		v := probs[m]
-		bound := (rang >> kNumBitModelTotalBits) * uint32(v)
+		bound := (rang >> kNumBitModelTotalBits) * uint32(*probPtr)
 
 		if code < bound {
-			v += ((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits
+			*probPtr += ((1 << kNumBitModelTotalBits) - *probPtr) >> kNumMoveBits
 			rang = bound
-			probs[m] = v
 			m <<= 1
 			symbol |= 0 << i
 
@@ -107,10 +108,9 @@ func BitTreeReverseDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, 
 				code = (code << 8) | uint32(b)
 			}
 		} else {
-			v -= v >> kNumMoveBits
+			*probPtr -= *probPtr >> kNumMoveBits
 			code -= bound
 			rang -= bound
-			probs[m] = v
 			m = (m << 1) | 1
 			symbol |= 1 << i
 
