@@ -369,7 +369,7 @@ func (r *Reader1) DecodeDistance(len uint32) (uint32, error) {
 	}
 
 	s := r.s
-	posSlot, err := s.posSlotDecoder[lenState].Decode(r.rangeDec)
+	posSlot, err := BitTreeDecode(s.posSlotDecoderProbs[lenState][:], posSlotDecoderNumBits, r.rangeDec)
 	if err != nil {
 		return 0, err
 	}
@@ -396,7 +396,7 @@ func (r *Reader1) DecodeDistance(len uint32) (uint32, error) {
 		}
 		dist += bit << kNumAlignBits
 
-		bit, err = BitTreeReverseDecode(s.alignDecoder.probs, s.alignDecoder.numBits, r.rangeDec)
+		bit, err = BitTreeReverseDecode(s.alignDecoderProbs[:], kNumAlignBits, r.rangeDec)
 		if err != nil {
 			return 0, err
 		}

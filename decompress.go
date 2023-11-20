@@ -227,7 +227,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 			{ // lenDecoder.Decode
 				choice := false
 				{ // r.rangeDec.DecodeBit(&s.lenDecoder.choice)
-					v := &s.lenDecoder.choice
+					v := &s.lenDecoderChoice
 					bound := (rRange >> kNumBitModelTotalBits) * uint32(*v)
 
 					if rCode < bound {
@@ -267,10 +267,9 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 					{ // s.lenDecoder.lowCoder[s.posState].Decode
 						m := uint32(1)
 
-						numBits := s.lenDecoder.lowCoder[s.posState].numBits
-						probsPtr := uintptr(unsafe.Pointer(&s.lenDecoder.lowCoder[s.posState].probs[0]))
+						probsPtr := uintptr(unsafe.Pointer(&s.lenDecoderLowCoder[s.posState][0]))
 
-						for i := 0; i < numBits; i++ {
+						for i := 0; i < lenLowCoderNumBits; i++ {
 							probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 							{ // rc.DecodeBit
 								bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -310,13 +309,13 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 							}
 						}
 
-						length = m - (uint32(1) << numBits)
+						length = m - (uint32(1) << lenLowCoderNumBits)
 					}
 				} else {
 					choice2 := false
 
 					{ // r.rangeDec.DecodeBit(&s.lenDecoder.choice2)
-						v := &s.lenDecoder.choice2
+						v := &s.lenDecoderChoice2
 						bound := (rRange >> kNumBitModelTotalBits) * uint32(*v)
 
 						if rCode < bound {
@@ -356,10 +355,9 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 						{ // s.lenDecoder.midCoder[s.posState].Decode
 							m := uint32(1)
 
-							numBits := s.lenDecoder.midCoder[s.posState].numBits
-							probsPtr := uintptr(unsafe.Pointer(&s.lenDecoder.midCoder[s.posState].probs[0]))
+							probsPtr := uintptr(unsafe.Pointer(&s.lenDecoderMidCoder[s.posState][0]))
 
-							for i := 0; i < numBits; i++ {
+							for i := 0; i < lenMidCoderNumBits; i++ {
 								probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -399,16 +397,15 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 								}
 							}
 
-							length = 8 + m - (uint32(1) << numBits)
+							length = 8 + m - (uint32(1) << lenMidCoderNumBits)
 						}
 					} else {
 						{ // s.lenDecoder.highCoder.Decode
 							m := uint32(1)
 
-							numBits := s.lenDecoder.highCoder.numBits
-							probsPtr := uintptr(unsafe.Pointer(&s.lenDecoder.highCoder.probs[0]))
+							probsPtr := uintptr(unsafe.Pointer(&s.lenDecoderHighCoder[0]))
 
-							for i := 0; i < numBits; i++ {
+							for i := 0; i < lenHighCoderNumBits; i++ {
 								probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -448,7 +445,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 								}
 							}
 
-							length = 16 + m - (uint32(1) << numBits)
+							length = 16 + m - (uint32(1) << lenHighCoderNumBits)
 						}
 					}
 				}
@@ -467,10 +464,9 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 				{ // s.posSlotDecoder[lenState].Decode
 					m := uint32(1)
 
-					numBits := s.posSlotDecoder[lenState].numBits
-					probsPtr := uintptr(unsafe.Pointer(&s.posSlotDecoder[lenState].probs[0]))
+					probsPtr := uintptr(unsafe.Pointer(&s.posSlotDecoderProbs[lenState][0]))
 
-					for i := 0; i < numBits; i++ {
+					for i := 0; i < posSlotDecoderNumBits; i++ {
 						probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 						{ // rc.DecodeBit
 							bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -510,7 +506,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 						}
 					}
 
-					posSlot = m - (uint32(1) << numBits)
+					posSlot = m - (uint32(1) << posSlotDecoderNumBits)
 				}
 
 				if posSlot < 4 {
@@ -604,12 +600,11 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 
 						symbol := uint32(0)
 						{ // BitTreeReverseDecode
-							probsPtr := uintptr(unsafe.Pointer(&s.alignDecoder.probs[0]))
-							numBits2 := s.alignDecoder.numBits
+							probsPtr := uintptr(unsafe.Pointer(&s.alignDecoderProbs[0]))
 
 							m := uint32(1)
 
-							for i := 0; i < numBits2; i++ {
+							for i := 0; i < kNumAlignBits; i++ {
 								probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -872,7 +867,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 			{ // r.s.repLenDecoder.Decode
 				choice := false
 				{ // r.rangeDec.DecodeBit(&r.s.repLenDecoder.choice)
-					v := &s.repLenDecoder.choice
+					v := &s.repLenDecoderChoice
 					bound := (rRange >> kNumBitModelTotalBits) * uint32(*v)
 
 					if rCode < bound {
@@ -912,10 +907,9 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 					{ // r.s.repLenDecoder.lowCoder[s.posState].Decode
 						m := uint32(1)
 
-						numBits := s.repLenDecoder.lowCoder[s.posState].numBits
-						probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoder.lowCoder[s.posState].probs[0]))
+						probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoderLowCoder[s.posState][0]))
 
-						for i := 0; i < numBits; i++ {
+						for i := 0; i < lenLowCoderNumBits; i++ {
 							probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 							{ // rc.DecodeBit
 								bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -955,12 +949,12 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 							}
 						}
 
-						length = m - (uint32(1) << numBits)
+						length = m - (uint32(1) << lenLowCoderNumBits)
 					}
 				} else {
 					choice2 := false
 					{ // r.rangeDec.DecodeBit(&r.s.repLenDecoder.choice2)
-						v := &s.repLenDecoder.choice2
+						v := &s.repLenDecoderChoice2
 						bound := (rRange >> kNumBitModelTotalBits) * uint32(*v)
 
 						if rCode < bound {
@@ -1000,10 +994,9 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 						{ // r.s.repLenDecoder.midCoder[s.posState].Decode
 							m := uint32(1)
 
-							numBits := s.repLenDecoder.midCoder[s.posState].numBits
-							probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoder.midCoder[s.posState].probs[0]))
+							probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoderMidCoder[s.posState][0]))
 
-							for i := 0; i < numBits; i++ {
+							for i := 0; i < lenMidCoderNumBits; i++ {
 								probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -1043,16 +1036,15 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 								}
 							}
 
-							length = 8 + m - (uint32(1) << numBits)
+							length = 8 + m - (uint32(1) << lenMidCoderNumBits)
 						}
 					} else {
 						{ // r.s.repLenDecoder.highCoder.Decode
 							m := uint32(1)
 
-							numBits := s.repLenDecoder.highCoder.numBits
-							probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoder.highCoder.probs[0]))
+							probsPtr := uintptr(unsafe.Pointer(&s.repLenDecoderHighCoder[0]))
 
-							for i := 0; i < numBits; i++ {
+							for i := 0; i < lenHighCoderNumBits; i++ {
 								probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -1092,7 +1084,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 								}
 							}
 
-							length = 16 + m - (uint32(1) << numBits)
+							length = 16 + m - (uint32(1) << lenHighCoderNumBits)
 						}
 					}
 				}

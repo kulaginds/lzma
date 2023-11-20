@@ -25,6 +25,14 @@ const (
 	kTopValue = uint32(1) << 24
 )
 
+const (
+	posSlotDecoderNumBits = 6
+
+	lenLowCoderNumBits  = 3
+	lenMidCoderNumBits  = 3
+	lenHighCoderNumBits = 8
+)
+
 const lzmaRequiredInputMax = 20
 
 const rangeDecoderHeaderLen = 5

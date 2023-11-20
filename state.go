@@ -1,30 +1,38 @@
 package lzma
 
 type state struct {
+	litProbs []prob
+
+	posSlotDecoderProbs [kNumLenToPosStates][1 << posSlotDecoderNumBits]prob
+	posDecoders         [1 + kNumFullDistances - kEndPosModelIndex]prob
+	alignDecoderProbs   [1 << kNumAlignBits]prob
+
+	lenDecoderChoice    prob
+	lenDecoderChoice2   prob
+	lenDecoderLowCoder  [1 << kNumPosBitsMax][1 << lenLowCoderNumBits]prob
+	lenDecoderMidCoder  [1 << kNumPosBitsMax][1 << lenMidCoderNumBits]prob
+	lenDecoderHighCoder [1 << lenHighCoderNumBits]prob
+
+	repLenDecoderChoice    prob
+	repLenDecoderChoice2   prob
+	repLenDecoderLowCoder  [1 << kNumPosBitsMax][1 << lenLowCoderNumBits]prob
+	repLenDecoderMidCoder  [1 << kNumPosBitsMax][1 << lenMidCoderNumBits]prob
+	repLenDecoderHighCoder [1 << lenHighCoderNumBits]prob
+
+	isMatch    [kNumStates << kNumPosBitsMax]prob
+	isRep      [kNumStates]prob
+	isRepG0    [kNumStates]prob
+	isRepG1    [kNumStates]prob
+	isRepG2    [kNumStates]prob
+	isRep0Long [kNumStates << kNumPosBitsMax]prob
+
 	markerIsMandatory bool
 	unpackSizeDefined bool
-	unpackSize        uint64
-	bytesLeft         uint64
+	lc, pb, lp        uint8
 
-	lc, pb, lp uint8
-
-	posMask uint32
-
-	litProbs       []prob
-	posSlotDecoder []*bitTreeDecoder
-	alignDecoder   *bitTreeDecoder
-	posDecoders    []prob
-
-	isMatch    []prob
-	isRep      []prob
-	isRepG0    []prob
-	isRepG1    []prob
-	isRepG2    []prob
-	isRep0Long []prob
-
-	lenDecoder    *lenDecoder
-	repLenDecoder *lenDecoder
-
+	unpackSize             uint64
+	bytesLeft              uint64
+	posMask                uint32
 	rep0, rep1, rep2, rep3 uint32
 	state                  uint32
 	posState               uint32
@@ -32,31 +40,13 @@ type state struct {
 
 func newState(lc, pb, lp uint8) *state {
 	s := &state{
+		litProbs: make([]prob, uint32(0x300)<<(lc+lp)),
+
 		lc: lc,
 		pb: pb,
 		lp: lp,
 
 		posMask: (1 << pb) - 1,
-
-		litProbs:       make([]prob, uint32(0x300)<<(lc+lp)),
-		posSlotDecoder: make([]*bitTreeDecoder, kNumLenToPosStates),
-
-		lenDecoder:    newLenDecoder(),
-		repLenDecoder: newLenDecoder(),
-		alignDecoder:  newBitTreeDecoder(kNumAlignBits),
-
-		posDecoders: make([]prob, 1+kNumFullDistances-kEndPosModelIndex),
-
-		isMatch:    make([]prob, kNumStates<<kNumPosBitsMax),
-		isRep:      make([]prob, kNumStates),
-		isRepG0:    make([]prob, kNumStates),
-		isRepG1:    make([]prob, kNumStates),
-		isRepG2:    make([]prob, kNumStates),
-		isRep0Long: make([]prob, kNumStates<<kNumPosBitsMax),
-	}
-
-	for i := 0; i < len(s.posSlotDecoder); i++ {
-		s.posSlotDecoder[i] = newBitTreeDecoder(6)
 	}
 
 	s.Reset()
@@ -83,22 +73,41 @@ func (s *state) Renew(lc, pb, lp uint8) {
 func (s *state) Reset() {
 	initProbs(s.litProbs)
 
-	for i := 0; i < len(s.posSlotDecoder); i++ {
-		s.posSlotDecoder[i].Reset()
+	for i := 0; i < len(s.posSlotDecoderProbs); i++ {
+		initProbs(s.posSlotDecoderProbs[i][:])
 	}
 
-	s.alignDecoder.Reset()
-	initProbs(s.posDecoders)
+	initProbs(s.alignDecoderProbs[:])
+	initProbs(s.posDecoders[:])
 
-	initProbs(s.isMatch)
-	initProbs(s.isRep)
-	initProbs(s.isRepG0)
-	initProbs(s.isRepG1)
-	initProbs(s.isRepG2)
-	initProbs(s.isRep0Long)
+	initProbs(s.isMatch[:])
+	initProbs(s.isRep[:])
+	initProbs(s.isRepG0[:])
+	initProbs(s.isRepG1[:])
+	initProbs(s.isRepG2[:])
+	initProbs(s.isRep0Long[:])
 
-	s.lenDecoder.Reset()
-	s.repLenDecoder.Reset()
+	{ // lenDecoder
+		s.lenDecoderChoice = probInitVal
+		s.lenDecoderChoice2 = probInitVal
+		initProbs(s.lenDecoderHighCoder[:])
+
+		for i := 0; i < len(s.lenDecoderLowCoder); i++ {
+			initProbs(s.lenDecoderLowCoder[i][:])
+			initProbs(s.lenDecoderMidCoder[i][:])
+		}
+	}
+
+	{ // repLenDecoder
+		s.repLenDecoderChoice = probInitVal
+		s.repLenDecoderChoice2 = probInitVal
+		initProbs(s.repLenDecoderHighCoder[:])
+
+		for i := 0; i < len(s.repLenDecoderLowCoder); i++ {
+			initProbs(s.repLenDecoderLowCoder[i][:])
+			initProbs(s.repLenDecoderMidCoder[i][:])
+		}
+	}
 
 	s.rep0, s.rep1, s.rep2, s.rep3 = 0, 0, 0, 0
 	s.state = 0

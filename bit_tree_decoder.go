@@ -22,13 +22,17 @@ func (d *bitTreeDecoder) Reset() {
 }
 
 func (d *bitTreeDecoder) Decode(rc *rangeDecoder) (uint32, error) {
+	return BitTreeDecode(d.probs, d.numBits, rc)
+}
+
+func BitTreeDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, error) {
 	m := uint32(1)
 
 	rang := rc.Range
 	code := rc.Code
-	probsPtr := uintptr(unsafe.Pointer(&d.probs[0]))
+	probsPtr := uintptr(unsafe.Pointer(&probs[0]))
 
-	for i := 0; i < d.numBits; i++ {
+	for i := 0; i < numBits; i++ {
 		probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
 		// rc.DecodeBit begin
 		bound := (rang >> kNumBitModelTotalBits) * uint32(*probPtr)
@@ -71,7 +75,7 @@ func (d *bitTreeDecoder) Decode(rc *rangeDecoder) (uint32, error) {
 	rc.Range = rang
 	rc.Code = code
 
-	return m - (uint32(1) << d.numBits), nil
+	return m - (uint32(1) << numBits), nil
 }
 
 func (d *bitTreeDecoder) ReverseDecode(rc *rangeDecoder) (uint32, error) {
