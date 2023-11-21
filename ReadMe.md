@@ -1,8 +1,23 @@
 # Golang LZMA reader implementation
 [Format specification](https://www.7-zip.org/sdk.html)
 
-This package implements LZMA reader like C++ code from `LzmaSpec.cpp` from specification.
-
-This reader more fast then lzma package of [ulikunitz/xz](https://github.com/ulikunitz/xz) (approximately 10%) by reducing allocations and inlining hot functions.
+This package based on LZMA reader from C++ code `LzmaSpec.cpp` from specification.
 
 The reader1 and reader2 has constructor specially for [sevenzip](https://github.com/bodgit/sevenzip) package.
+
+## Benchmark
+### LZMA1 decompress
+I have private 1GB tar file, compressed by lzma-utility from [xz package](https://tukaani.org/xz/).
+
+Environment:
+- os: macOS Ventura 13.6.1 (22G313)
+- arch: amd64
+- cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
+
+Decompression speed:
+- 7z (21.07) - 52.37 MiB/s (+32.55%)
+- xz (5.4.3) - 43.99 MiB/s (+11.34%)
+- my (v0.0.1-alpha5) - 39.51 MiB/s (compared with this speed)
+- [ulikunitz/xz](https://github.com/ulikunitz/xz)  ([orisano](https://github.com/orisano/xz) fork at commit 4b4c597)- 25.70 MiB/s (-34.95%)
+
+This reader more fast than package of [ulikunitz/xz](https://github.com/ulikunitz/xz) by reducing allocations, inlining hot functions and unbranching.
