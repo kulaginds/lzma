@@ -2,7 +2,6 @@ package lzma
 
 import (
 	"io"
-	"unsafe"
 )
 
 type window struct {
@@ -10,10 +9,8 @@ type window struct {
 	pos     uint32
 	size    uint32
 	pending uint32
-	bufPos  uintptr
 	isFull  bool
 	//TotalPos uint32
-
 }
 
 func newWindow(dictSize uint32) *window {
@@ -24,14 +21,13 @@ func newWindow(dictSize uint32) *window {
 		size:   dictSize,
 		isFull: false,
 	}
-	w.bufPos = uintptr(unsafe.Pointer(&w.buf[0]))
 
 	return w
 }
 
 func (w *window) PutByte(b byte) {
 	//w.TotalPos++
-	*(*byte)(unsafe.Pointer(w.bufPos + uintptr(w.pos))) = b
+	w.buf[w.pos] = b
 	w.pos++
 	w.pending++
 
@@ -48,18 +44,18 @@ func (w *window) GetByte(dist uint32) byte {
 		i = w.size - dist + w.pos
 	}
 
-	return *(*byte)(unsafe.Pointer(w.bufPos + uintptr(i)))
+	return w.buf[i]
 }
 
 func (w *window) CopyMatch(dist, len uint32) {
-	from := w.bufPos
-	to := w.bufPos + uintptr(w.pos)
-	limit := w.bufPos + uintptr(w.size)
+	from := uint32(0)
+	to := w.pos
+	limit := w.size
 
 	if dist <= w.pos {
-		from += uintptr(w.pos - dist)
+		from += w.pos - dist
 	} else {
-		from += uintptr(w.size - dist + w.pos)
+		from += w.size - dist + w.pos
 	}
 
 	w.pos += len
@@ -70,16 +66,16 @@ func (w *window) CopyMatch(dist, len uint32) {
 	}
 
 	for ; len > 0; len-- {
-		*(*byte)(unsafe.Pointer(to)) = *(*byte)(unsafe.Pointer(from))
+		w.buf[to] = w.buf[from]
 		from++
 		to++
 
 		if from == limit {
-			from -= uintptr(w.size)
+			from -= w.size
 		}
 
 		if to == limit {
-			to -= uintptr(w.size)
+			to -= w.size
 		}
 	}
 }
@@ -102,24 +98,23 @@ func (w *window) ReadPending(p []byte) (int, error) {
 		minLen = uint32(len(p))
 	}
 
-	fromPtr := w.bufPos
-	fromLimit := fromPtr + uintptr(len(w.buf))
+	fromPtr := uint32(0)
+	toPtr := uint32(0)
+	fromLimit := uint32(len(w.buf))
 	dist := w.pending
 	if dist > w.pos {
-		fromPtr += uintptr(w.size - dist + w.pos)
+		fromPtr += w.size - dist + w.pos
 	} else {
-		fromPtr += uintptr(w.pos - dist)
+		fromPtr += w.pos - dist
 	}
 
-	toPtr := uintptr(unsafe.Pointer(&p[0]))
-
 	for i := uint32(0); i < minLen; i++ {
-		*(*byte)(unsafe.Pointer(toPtr)) = *(*byte)(unsafe.Pointer(fromPtr))
+		p[toPtr] = w.buf[fromPtr]
 		fromPtr++
 		toPtr++
 
 		if fromPtr == fromLimit {
-			fromPtr -= uintptr(w.size)
+			fromPtr -= w.size
 		}
 	}
 

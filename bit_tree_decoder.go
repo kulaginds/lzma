@@ -1,7 +1,5 @@
 package lzma
 
-import "unsafe"
-
 type bitTreeDecoder struct {
 	probs   []prob
 	numBits int
@@ -30,15 +28,14 @@ func BitTreeDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, error) 
 
 	rang := rc.Range
 	code := rc.Code
-	probsPtr := uintptr(unsafe.Pointer(&probs[0]))
 
 	for i := 0; i < numBits; i++ {
-		probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
+		v := &probs[m]
 		// rc.DecodeBit begin
-		bound := (rang >> kNumBitModelTotalBits) * uint32(*probPtr)
+		bound := (rang >> kNumBitModelTotalBits) * uint32(*v)
 
 		if code < bound {
-			*probPtr += ((1 << kNumBitModelTotalBits) - *probPtr) >> kNumMoveBits
+			*v += ((1 << kNumBitModelTotalBits) - *v) >> kNumMoveBits
 			rang = bound
 			m <<= 1
 
@@ -53,7 +50,7 @@ func BitTreeDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, error) 
 				code = (code << 8) | uint32(b)
 			}
 		} else {
-			*probPtr -= *probPtr >> kNumMoveBits
+			*v -= *v >> kNumMoveBits
 			code -= bound
 			rang -= bound
 			m = (m << 1) + 1
@@ -88,15 +85,14 @@ func BitTreeReverseDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, 
 
 	m := uint32(1)
 	symbol := uint32(0)
-	probsPtr := uintptr(unsafe.Pointer(&probs[0]))
 
 	for i := 0; i < numBits; i++ {
-		probPtr := (*prob)(unsafe.Pointer(probsPtr + uintptr(m)*unsafe.Sizeof(prob(0))))
+		v := &probs[m]
 		// rc.DecodeBit begin
-		bound := (rang >> kNumBitModelTotalBits) * uint32(*probPtr)
+		bound := (rang >> kNumBitModelTotalBits) * uint32(*v)
 
 		if code < bound {
-			*probPtr += ((1 << kNumBitModelTotalBits) - *probPtr) >> kNumMoveBits
+			*v += ((1 << kNumBitModelTotalBits) - *v) >> kNumMoveBits
 			rang = bound
 			m <<= 1
 			symbol |= 0 << i
@@ -112,7 +108,7 @@ func BitTreeReverseDecode(probs []prob, numBits int, rc *rangeDecoder) (uint32, 
 				code = (code << 8) | uint32(b)
 			}
 		} else {
-			*probPtr -= *probPtr >> kNumMoveBits
+			*v -= *v >> kNumMoveBits
 			code -= bound
 			rang -= bound
 			m = (m << 1) | 1
