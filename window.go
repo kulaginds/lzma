@@ -2,6 +2,7 @@ package lzma
 
 import (
 	"io"
+	"unsafe"
 )
 
 type window struct {
@@ -27,7 +28,8 @@ func newWindow(dictSize uint32) *window {
 
 func (w *window) PutByte(b byte) {
 	//w.TotalPos++
-	w.buf[w.pos] = b
+	*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(w.pos))) = b
+	//w.buf[w.pos] = b
 	w.pos++
 	w.pending++
 
@@ -44,7 +46,8 @@ func (w *window) GetByte(dist uint32) byte {
 		i = w.size - dist + w.pos
 	}
 
-	return w.buf[i]
+	return *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(i)))
+	//return w.buf[i]
 }
 
 func (w *window) CopyMatch(dist, len uint32) {
@@ -66,7 +69,8 @@ func (w *window) CopyMatch(dist, len uint32) {
 	}
 
 	for ; len > 0; len-- {
-		w.buf[to] = w.buf[from]
+		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(to))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(from)))
+		//w.buf[to] = w.buf[from]
 		from++
 		to++
 
@@ -109,7 +113,8 @@ func (w *window) ReadPending(p []byte) (int, error) {
 	}
 
 	for i := uint32(0); i < minLen; i++ {
-		p[toPtr] = w.buf[fromPtr]
+		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&p[0])) + uintptr(toPtr))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(fromPtr)))
+		//p[toPtr] = w.buf[fromPtr]
 		fromPtr++
 		toPtr++
 
