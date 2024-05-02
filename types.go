@@ -1,5 +1,7 @@
 package lzma
 
+import "unsafe"
+
 const lzmaHeaderLen = 13
 
 const (
@@ -94,3 +96,5 @@ const (
 )
 
 type prob uint16
+
+const probSize = unsafe.Sizeof(prob(0))
