@@ -7,6 +7,7 @@ import (
 
 type window struct {
 	buf     []byte
+	bufPtr  *byte
 	pos     uint32
 	size    uint32
 	pending uint32
@@ -22,13 +23,14 @@ func newWindow(dictSize uint32) *window {
 		size:   dictSize,
 		isFull: false,
 	}
+	w.bufPtr = &w.buf[0]
 
 	return w
 }
 
 func (w *window) PutByte(b byte) {
 	//w.TotalPos++
-	*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(w.pos))) = b
+	*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(w.bufPtr)) + uintptr(w.pos))) = b
 	//w.buf[w.pos] = b
 	w.pos++
 	w.pending++
@@ -46,7 +48,7 @@ func (w *window) GetByte(dist uint32) byte {
 		i = w.size - dist + w.pos
 	}
 
-	return *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(i)))
+	return *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(w.bufPtr)) + uintptr(i)))
 	//return w.buf[i]
 }
 
@@ -69,7 +71,7 @@ func (w *window) CopyMatch(dist, len uint32) {
 	}
 
 	for ; len > 0; len-- {
-		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(to))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(from)))
+		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(w.bufPtr)) + uintptr(to))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(w.bufPtr)) + uintptr(from)))
 		//w.buf[to] = w.buf[from]
 		from++
 		to++
@@ -112,8 +114,10 @@ func (w *window) ReadPending(p []byte) (int, error) {
 		fromPtr += w.pos - dist
 	}
 
+	pPtr := &p[0]
+
 	for i := uint32(0); i < minLen; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&p[0])) + uintptr(toPtr))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(&w.buf[0])) + uintptr(fromPtr)))
+		*(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(pPtr)) + uintptr(toPtr))) = *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(w.bufPtr)) + uintptr(fromPtr)))
 		//p[toPtr] = w.buf[fromPtr]
 		fromPtr++
 		toPtr++

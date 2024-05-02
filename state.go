@@ -19,12 +19,18 @@ type state struct {
 	repLenDecoderMidCoder  [1 << kNumPosBitsMax][1 << lenMidCoderNumBits]prob
 	repLenDecoderHighCoder [1 << lenHighCoderNumBits]prob
 
-	isMatch    [kNumStates << kNumPosBitsMax]prob
-	isRep      [kNumStates]prob
-	isRepG0    [kNumStates]prob
-	isRepG1    [kNumStates]prob
-	isRepG2    [kNumStates]prob
-	isRep0Long [kNumStates << kNumPosBitsMax]prob
+	isMatch       [kNumStates << kNumPosBitsMax]prob
+	isRep         [kNumStates]prob
+	isRepG0       [kNumStates]prob
+	isRepG1       [kNumStates]prob
+	isRepG2       [kNumStates]prob
+	isRep0Long    [kNumStates << kNumPosBitsMax]prob
+	isMatchPtr    *prob
+	isRepPtr      *prob
+	isRepG0Ptr    *prob
+	isRepG1Ptr    *prob
+	isRepG2Ptr    *prob
+	isRep0LongPtr *prob
 
 	markerIsMandatory bool
 	unpackSizeDefined bool

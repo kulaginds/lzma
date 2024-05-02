@@ -54,7 +54,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 
 						symbol := uint32(1)
 						litState := ((r.outWindow.pos & ((1 << s.lp) - 1)) << s.lc) + (prevByte >> (8 - s.lc))
-						probs := r.s.litProbs[(uint32(0x300) * litState):]
+						probsPtr := &r.s.litProbs[(uint32(0x300) * litState)]
 
 						if s.state >= 7 {
 							matchByte := r.outWindow.GetByte(s.rep0 + 1)
@@ -63,14 +63,14 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 								matchBit := uint32((matchByte >> 7) & 1)
 								matchByte <<= 1
 								i := ((1 + matchBit) << 8) + symbol
-								v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(i)*probSize))
+								v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(i)*probSize))
 								//v := probs[i]
 
 								{ // rc.DecodeBit
 									bound := (rRange >> kNumBitModelTotalBits) * uint32(v)
 
 									if rCode < bound {
-										*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(i)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
+										*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(i)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
 										rRange = bound
 										symbol <<= 1
 
@@ -89,7 +89,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 											rCode = (rCode << 8) | uint32(b)
 										}
 									} else {
-										*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(i)*probSize)) = v - (v >> kNumMoveBits)
+										*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(i)*probSize)) = v - (v >> kNumMoveBits)
 										rCode -= bound
 										rRange -= bound
 										symbol = (symbol << 1) | 1
@@ -125,13 +125,13 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 						}
 
 						for symbol < 0x100 {
-							v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(symbol)*probSize))
+							v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(symbol)*probSize))
 							//v := probs[symbol]
 							{ // rc.DecodeBit
 								bound := (rRange >> kNumBitModelTotalBits) * uint32(v)
 
 								if rCode < bound {
-									*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(symbol)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
+									*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(symbol)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
 									rRange = bound
 									symbol <<= 1
 
@@ -146,7 +146,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 										rCode = (rCode << 8) | uint32(b)
 									}
 								} else {
-									*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(symbol)*probSize)) = v - (v >> kNumMoveBits)
+									*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(symbol)*probSize)) = v - (v >> kNumMoveBits)
 									rCode -= bound
 									rRange -= bound
 									symbol = (symbol << 1) | 1
@@ -493,19 +493,19 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 
 										if posSlot < kEndPosModelIndex {
 											{ // BitTreeReverseDecode
-												probs := s.posDecoders[dist-posSlot:]
+												probsPtr := &s.posDecoders[dist-posSlot]
 
 												m := uint32(1)
 												symbol := uint32(0)
 
 												for i := uint32(0); i < numDirectBits; i++ {
-													v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(m)*probSize))
+													v := *(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(m)*probSize))
 													//v := probs[m]
 													{ // rc.DecodeBit
 														bound := (rRange >> kNumBitModelTotalBits) * uint32(v)
 
 														if rCode < bound {
-															*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(m)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
+															*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(m)*probSize)) = v + (((1 << kNumBitModelTotalBits) - v) >> kNumMoveBits)
 															rRange = bound
 															m <<= 1
 															symbol |= 0 << i
@@ -521,7 +521,7 @@ func (r *Reader1) decompress(needBytesCount uint32) (err error) {
 																rCode = (rCode << 8) | uint32(b)
 															}
 														} else {
-															*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(&probs[0])) + uintptr(m)*probSize)) = v - (v >> kNumMoveBits)
+															*(*prob)(unsafe.Pointer(uintptr(unsafe.Pointer(probsPtr)) + uintptr(m)*probSize)) = v - (v >> kNumMoveBits)
 															rCode -= bound
 															rRange -= bound
 															m = (m << 1) | 1
