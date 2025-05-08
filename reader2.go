@@ -40,10 +40,24 @@ func NewReader2(inStream io.Reader, dictSize int) (*Reader2, error) {
 	return r, r.initialize()
 }
 
-func NewReader2ForSevenZip(inStream io.Reader, props []byte) (*Reader2, error) {
-	br, ok := inStream.(*bufio.Reader)
+var errInsufficientProperties = errors.New("lzma2: not enough properties")
+
+// NewLZMA2DecompressorForSevenZip decompressor constructor for bodgit/sevenzip.
+// Use with bodgit/sevenzip@1.6.1 or above.
+//
+// sevenzip.RegisterDecompressor([]byte{0x21}, sevenzip.Decompressor(lzma2.NewLZMA2DecompressorForSevenZip))
+func NewLZMA2DecompressorForSevenZip(props []byte, _ uint64, readers []io.ReadCloser) (io.ReadCloser, error) {
+	if len(readers) != 1 {
+		return nil, errNeedOneReader
+	}
+
+	if len(props) != 1 {
+		return nil, errInsufficientProperties
+	}
+
+	br, ok := readers[0].(io.Reader).(*bufio.Reader)
 	if !ok {
-		br = bufio.NewReader(inStream)
+		br = bufio.NewReader(readers[0])
 	}
 
 	r := &Reader2{
@@ -54,7 +68,10 @@ func NewReader2ForSevenZip(inStream io.Reader, props []byte) (*Reader2, error) {
 		header: make([]byte, 6),
 	}
 
-	return r, r.initialize()
+	return &readCloser{
+		c: readers[0],
+		r: r,
+	}, r.initialize()
 }
 
 func (r *Reader2) initialize() error {

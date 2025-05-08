@@ -1,6 +1,7 @@
 package lzma
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -22,7 +23,17 @@ func NewReader1(inStream io.ByteReader) (*Reader1, error) {
 	return r, r.initializeFull(inStream)
 }
 
-func NewReader1ForSevenZip(inStream io.ByteReader, props []byte, unpackSize uint64) (*Reader1, error) {
+var errNeedOneReader = errors.New("lzma: need exactly one reader")
+
+// NewLZMADecompressorForSevenZip decompressor constructor for bodgit/sevenzip.
+// Use with bodgit/sevenzip@1.6.1 or above.
+//
+// sevenzip.RegisterDecompressor([]byte{0x03, 0x01, 0x01}, sevenzip.Decompressor(lzma.NewLZMADecompressorForSevenZip))
+func NewLZMADecompressorForSevenZip(props []byte, unpackSize uint64, readers []io.ReadCloser) (io.ReadCloser, error) {
+	if len(readers) != 1 {
+		return nil, errNeedOneReader
+	}
+
 	lc, pb, lp, err := DecodeProp(props[0])
 	if err != nil {
 		return nil, err
@@ -33,12 +44,20 @@ func NewReader1ForSevenZip(inStream io.ByteReader, props []byte, unpackSize uint
 		return nil, err
 	}
 
+	inStream, ok := readers[0].(io.ByteReader)
+	if !ok {
+		inStream = bufio.NewReader(readers[0])
+	}
+
 	r := &Reader1{
 		rangeDec:  newRangeDecoder(inStream),
 		outWindow: newWindow(dictSize),
 	}
 
-	return r, r.initialize(lc, pb, lp, unpackSize)
+	return &readCloser{
+		c: readers[0],
+		r: r,
+	}, r.initialize(lc, pb, lp, unpackSize)
 }
 
 func NewReader1ForReader2(inStream io.ByteReader, prop byte, unpackSize uint64, outWindow *window) (*Reader1, error) {
